@@ -1,5 +1,16 @@
 @php
     $items = old('items', $itemsData ?? []);
+    $supplierProductMap = collect($suppliers)
+        ->mapWithKeys(function ($supplier) {
+            return [
+                (string) $supplier->id => $supplier->resolvedProducts()
+                    ->pluck('product_name')
+                    ->filter()
+                    ->values()
+                    ->all(),
+            ];
+        })
+        ->all();
     if (empty($items)) {
         $items = [[
             'supplier_id' => null,
@@ -114,7 +125,7 @@
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <div>
                 <h5 class="mb-1">Order Items</h5>
-                <small class="text-muted">Supplier hanya menampilkan yang statusnya Approved atau Active.</small>
+                <small class="text-muted">Supplier hanya menampilkan yang statusnya Approved atau Active, dan product mengikuti supplier yang dipilih.</small>
             </div>
             <button type="button" class="btn btn-light-primary" id="add-item-row">Add Item Row</button>
         </div>
@@ -137,9 +148,17 @@
                 </thead>
                 <tbody>
                     @foreach ($items as $index => $item)
+                        @php
+                            $selectedSupplierId = (string) data_get($item, 'supplier_id');
+                            $selectedProductName = data_get($item, 'product_name');
+                            $productOptions = $supplierProductMap[$selectedSupplierId] ?? [];
+                            if ($selectedProductName && ! in_array($selectedProductName, $productOptions, true)) {
+                                $productOptions[] = $selectedProductName;
+                            }
+                        @endphp
                         <tr class="order-item-row">
                             <td>
-                                <select name="items[{{ $index }}][supplier_id]" class="form-select">
+                                <select name="items[{{ $index }}][supplier_id]" class="form-select js-supplier-select" required>
                                     <option value="">Select supplier</option>
                                     @foreach ($suppliers as $supplierOption)
                                         <option value="{{ $supplierOption->id }}" @selected((string) data_get($item, 'supplier_id') === (string) $supplierOption->id)>
@@ -150,7 +169,12 @@
                                 @error("items.$index.supplier_id")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                             </td>
                             <td>
-                                <input type="text" name="items[{{ $index }}][product_name]" class="form-control" value="{{ data_get($item, 'product_name') }}" required>
+                                <select name="items[{{ $index }}][product_name]" class="form-select js-product-select" data-selected-product="{{ $selectedProductName }}" @disabled($selectedSupplierId === '') required>
+                                    <option value="">{{ $selectedSupplierId !== '' ? 'Select product' : 'Select supplier first' }}</option>
+                                    @foreach ($productOptions as $productOption)
+                                        <option value="{{ $productOption }}" @selected($selectedProductName === $productOption)>{{ $productOption }}</option>
+                                    @endforeach
+                                </select>
                                 @error("items.$index.product_name")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                             </td>
                             <td>
@@ -158,22 +182,22 @@
                                 @error("items.$index.specification")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                             </td>
                             <td>
-                                <input type="number" step="0.01" min="0.01" name="items[{{ $index }}][quantity_kg]" class="form-control js-qty" value="{{ data_get($item, 'quantity_kg') }}" required>
+                                <input type="text" inputmode="decimal" name="items[{{ $index }}][quantity_kg]" class="form-control js-qty js-numeric-input" value="{{ data_get($item, 'quantity_kg') }}" required>
                                 @error("items.$index.quantity_kg")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                             </td>
                             <td>
-                                <input type="number" step="0.01" min="0" name="items[{{ $index }}][selling_price]" class="form-control js-selling-price" value="{{ data_get($item, 'selling_price') }}" required>
+                                <input type="text" inputmode="decimal" name="items[{{ $index }}][selling_price]" class="form-control js-selling-price js-numeric-input" value="{{ data_get($item, 'selling_price') }}" required>
                                 @error("items.$index.selling_price")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                             </td>
                             <td>
-                                <input type="number" step="0.01" min="0" name="items[{{ $index }}][buying_price]" class="form-control js-buying-price" value="{{ data_get($item, 'buying_price') }}" required>
+                                <input type="text" inputmode="decimal" name="items[{{ $index }}][buying_price]" class="form-control js-buying-price js-numeric-input" value="{{ data_get($item, 'buying_price') }}" required>
                                 @error("items.$index.buying_price")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                             </td>
                             <td>
-                                <div class="fw-semibold js-line-profit">0.00</div>
-                                <small class="text-muted js-line-total-sales">Sales Total: 0.00</small><br>
-                                <small class="text-muted js-line-total-buying">Product Cost Total: 0.00</small><br>
-                                <small class="text-muted js-line-total-profit">Gross Line Profit: 0.00</small>
+                                <div class="fw-semibold js-line-profit">0</div>
+                                <small class="text-muted js-line-total-sales">Sales Total: 0</small><br>
+                                <small class="text-muted js-line-total-buying">Product Cost Total: 0</small><br>
+                                <small class="text-muted js-line-total-profit">Gross Line Profit: 0</small>
                             </td>
                             <td class="text-center">
                                 <button type="button" class="btn btn-sm btn-light-danger js-remove-row">Remove</button>
@@ -192,42 +216,42 @@
                 <div class="row g-3">
                     <div class="col-12 col-lg-6">
                         <label for="local_logistics_cost" class="form-label">Local Logistics Cost</label>
-                        <input type="number" step="0.01" min="0" id="local_logistics_cost" name="local_logistics_cost" class="form-control js-extra-cost @error('local_logistics_cost') is-invalid @enderror" value="{{ old('local_logistics_cost', $order->local_logistics_cost ?? 0) }}">
+                        <input type="text" inputmode="decimal" id="local_logistics_cost" name="local_logistics_cost" class="form-control js-extra-cost js-numeric-input @error('local_logistics_cost') is-invalid @enderror" value="{{ old('local_logistics_cost', $order->local_logistics_cost ?? 0) }}">
                         @error('local_logistics_cost')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-12 col-lg-6">
                         <label for="export_document_cost" class="form-label">Export Document Cost</label>
-                        <input type="number" step="0.01" min="0" id="export_document_cost" name="export_document_cost" class="form-control js-extra-cost @error('export_document_cost') is-invalid @enderror" value="{{ old('export_document_cost', $order->export_document_cost ?? 0) }}">
+                        <input type="text" inputmode="decimal" id="export_document_cost" name="export_document_cost" class="form-control js-extra-cost js-numeric-input @error('export_document_cost') is-invalid @enderror" value="{{ old('export_document_cost', $order->export_document_cost ?? 0) }}">
                         @error('export_document_cost')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-12 col-lg-6">
                         <label for="forwarding_cost" class="form-label">Forwarding Cost</label>
-                        <input type="number" step="0.01" min="0" id="forwarding_cost" name="forwarding_cost" class="form-control js-extra-cost @error('forwarding_cost') is-invalid @enderror" value="{{ old('forwarding_cost', $order->forwarding_cost ?? 0) }}">
+                        <input type="text" inputmode="decimal" id="forwarding_cost" name="forwarding_cost" class="form-control js-extra-cost js-numeric-input @error('forwarding_cost') is-invalid @enderror" value="{{ old('forwarding_cost', $order->forwarding_cost ?? 0) }}">
                         @error('forwarding_cost')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-12 col-lg-6">
                         <label for="freight_cost" class="form-label">Freight Cost</label>
-                        <input type="number" step="0.01" min="0" id="freight_cost" name="freight_cost" class="form-control js-extra-cost @error('freight_cost') is-invalid @enderror" value="{{ old('freight_cost', $order->freight_cost ?? 0) }}">
+                        <input type="text" inputmode="decimal" id="freight_cost" name="freight_cost" class="form-control js-extra-cost js-numeric-input @error('freight_cost') is-invalid @enderror" value="{{ old('freight_cost', $order->freight_cost ?? 0) }}">
                         @error('freight_cost')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-12 col-lg-6">
                         <label for="insurance_cost" class="form-label">Insurance Cost</label>
-                        <input type="number" step="0.01" min="0" id="insurance_cost" name="insurance_cost" class="form-control js-extra-cost @error('insurance_cost') is-invalid @enderror" value="{{ old('insurance_cost', $order->insurance_cost ?? 0) }}">
+                        <input type="text" inputmode="decimal" id="insurance_cost" name="insurance_cost" class="form-control js-extra-cost js-numeric-input @error('insurance_cost') is-invalid @enderror" value="{{ old('insurance_cost', $order->insurance_cost ?? 0) }}">
                         @error('insurance_cost')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-12 col-lg-6">
                         <label for="compliance_cost" class="form-label">Compliance Cost</label>
-                        <input type="number" step="0.01" min="0" id="compliance_cost" name="compliance_cost" class="form-control js-extra-cost @error('compliance_cost') is-invalid @enderror" value="{{ old('compliance_cost', $order->compliance_cost ?? 0) }}" placeholder="FDA test, lab, phytosanitary">
+                        <input type="text" inputmode="decimal" id="compliance_cost" name="compliance_cost" class="form-control js-extra-cost js-numeric-input @error('compliance_cost') is-invalid @enderror" value="{{ old('compliance_cost', $order->compliance_cost ?? 0) }}" placeholder="FDA test, lab, phytosanitary">
                         @error('compliance_cost')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-12 col-lg-6">
                         <label for="destination_cost" class="form-label">Destination Cost</label>
-                        <input type="number" step="0.01" min="0" id="destination_cost" name="destination_cost" class="form-control js-extra-cost @error('destination_cost') is-invalid @enderror" value="{{ old('destination_cost', $order->destination_cost ?? 0) }}" placeholder="Broker, inland, inspection">
+                        <input type="text" inputmode="decimal" id="destination_cost" name="destination_cost" class="form-control js-extra-cost js-numeric-input @error('destination_cost') is-invalid @enderror" value="{{ old('destination_cost', $order->destination_cost ?? 0) }}" placeholder="Broker, inland, inspection">
                         @error('destination_cost')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-12 col-lg-6">
                         <label for="misc_cost" class="form-label">Misc Cost</label>
-                        <input type="number" step="0.01" min="0" id="misc_cost" name="misc_cost" class="form-control js-extra-cost @error('misc_cost') is-invalid @enderror" value="{{ old('misc_cost', $order->misc_cost ?? 0) }}">
+                        <input type="text" inputmode="decimal" id="misc_cost" name="misc_cost" class="form-control js-extra-cost js-numeric-input @error('misc_cost') is-invalid @enderror" value="{{ old('misc_cost', $order->misc_cost ?? 0) }}">
                         @error('misc_cost')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                 </div>
@@ -241,32 +265,32 @@
                 <h6 class="mb-3">Export Profit Summary</h6>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Sales Total</span>
-                    <strong id="summary-sales">0.00</strong>
+                    <strong id="summary-sales">0</strong>
                 </div>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Product Cost Total</span>
-                    <strong id="summary-buying">0.00</strong>
+                    <strong id="summary-buying">0</strong>
                 </div>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Gross Profit</span>
-                    <strong id="summary-gross-profit">0.00</strong>
+                    <strong id="summary-gross-profit">0</strong>
                 </div>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Gross Margin</span>
-                    <strong id="summary-gross-margin">0.00%</strong>
+                    <strong id="summary-gross-margin">0%</strong>
                 </div>
                 <hr>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Total Export Costs</span>
-                    <strong id="summary-extra-cost">0.00</strong>
+                    <strong id="summary-extra-cost">0</strong>
                 </div>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Net Profit</span>
-                    <strong id="summary-net-profit">0.00</strong>
+                    <strong id="summary-net-profit">0</strong>
                 </div>
                 <div class="d-flex justify-content-between">
                     <span>Net Margin</span>
-                    <strong id="summary-net-margin">0.00%</strong>
+                    <strong id="summary-net-margin">0%</strong>
                 </div>
             </div>
         </div>
@@ -304,6 +328,15 @@
                 '<option value="">Select supplier</option>' .
                 collect($suppliers)->map(fn ($supplierOption) => '<option value="' . $supplierOption->id . '">' . e($supplierOption->supplier_name . ' (' . $supplierOption->supplier_code . ')') . '</option>')->implode('')
             );
+            const supplierProductsMap = @json($supplierProductMap);
+            const numericFieldsSelector = '.js-numeric-input';
+
+            const escapeHtml = (value) => String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
 
             const renumberRows = () => {
                 [...tableBody.querySelectorAll('.order-item-row')].forEach((row, index) => {
@@ -313,14 +346,151 @@
                 });
             };
 
+            const sanitizeNumericValue = (value) => {
+                let sanitized = String(value || '').replace(',', '.').replace(/[^0-9.]/g, '');
+                const firstDotIndex = sanitized.indexOf('.');
+
+                if (firstDotIndex !== -1) {
+                    sanitized = sanitized.slice(0, firstDotIndex + 1) + sanitized.slice(firstDotIndex + 1).replaceAll('.', '');
+                }
+
+                if (sanitized === '') {
+                    return '';
+                }
+
+                if (sanitized.startsWith('.')) {
+                    sanitized = `0${sanitized}`;
+                }
+
+                const [integerPartRaw, decimalPart] = sanitized.split('.');
+                const normalizedIntegerPart = integerPartRaw.replace(/^0+(?=\d)/, '') || '0';
+
+                if (typeof decimalPart === 'string') {
+                    return `${normalizedIntegerPart}.${decimalPart}`;
+                }
+
+                return normalizedIntegerPart;
+            };
+
+            const bindNumericGuards = (root = document) => {
+                root.querySelectorAll(numericFieldsSelector).forEach((field) => {
+                    if (field.dataset.numericGuardBound === 'true') {
+                        return;
+                    }
+
+                    field.dataset.numericGuardBound = 'true';
+                    field.setAttribute('autocomplete', 'off');
+
+                    field.addEventListener('keydown', (event) => {
+                        if (['e', 'E', '+', '-'].includes(event.key)) {
+                            event.preventDefault();
+                        }
+                    });
+
+                    field.addEventListener('beforeinput', (event) => {
+                        if (event.data && /[^0-9.,]/.test(event.data)) {
+                            event.preventDefault();
+                            return;
+                        }
+
+                        if (
+                            event.inputType === 'insertText' &&
+                            /^[1-9]$/.test(event.data || '') &&
+                            (field.value === '0' || field.value === '0.00')
+                        ) {
+                            event.preventDefault();
+                            field.value = event.data;
+                            field.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    });
+
+                    field.addEventListener('input', () => {
+                        const sanitized = sanitizeNumericValue(field.value);
+
+                        if (field.value !== sanitized) {
+                            field.value = sanitized;
+                        }
+                    });
+
+                    field.addEventListener('paste', (event) => {
+                        event.preventDefault();
+                        const pastedText = event.clipboardData?.getData('text') ?? '';
+                        const sanitized = sanitizeNumericValue(pastedText);
+                        const start = field.selectionStart ?? field.value.length;
+                        const end = field.selectionEnd ?? field.value.length;
+                        const nextValue = field.value.slice(0, start) + sanitized + field.value.slice(end);
+                        field.value = sanitizeNumericValue(nextValue);
+                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                    });
+                });
+            };
+
+            const buildProductOptionsHtml = (supplierId, selectedProduct = '') => {
+                const normalizedSupplierId = String(supplierId || '');
+                const products = supplierProductsMap[normalizedSupplierId] || [];
+                const selectedValue = String(selectedProduct || '');
+
+                if (products.length === 0 && selectedValue) {
+                    return `<option value="">Select product</option><option value="${escapeHtml(selectedValue)}" selected>${escapeHtml(selectedValue)}</option>`;
+                }
+
+                if (products.length === 0) {
+                    return `<option value="">${normalizedSupplierId ? 'No product available' : 'Select supplier first'}</option>`;
+                }
+
+                const fallbackProducts = selectedValue && !products.includes(selectedValue)
+                    ? [...products, selectedValue]
+                    : products;
+
+                return '<option value="">Select product</option>' + fallbackProducts.map((product) => {
+                    const isSelected = product === selectedValue ? ' selected' : '';
+                    return `<option value="${escapeHtml(product)}"${isSelected}>${escapeHtml(product)}</option>`;
+                }).join('');
+            };
+
+            const syncProductSelect = (row, selectedProduct = '') => {
+                const supplierSelect = row.querySelector('.js-supplier-select');
+                const productSelect = row.querySelector('.js-product-select');
+
+                if (!supplierSelect || !productSelect) {
+                    return;
+                }
+
+                const supplierId = supplierSelect.value;
+                productSelect.innerHTML = buildProductOptionsHtml(supplierId, selectedProduct);
+                productSelect.disabled = !supplierId || (!(supplierProductsMap[String(supplierId)] || []).length && !selectedProduct);
+
+                if (selectedProduct) {
+                    productSelect.value = selectedProduct;
+                }
+            };
+
+            const initializeProductSelects = () => {
+                [...tableBody.querySelectorAll('.order-item-row')].forEach((row) => {
+                    const productSelect = row.querySelector('.js-product-select');
+                    syncProductSelect(row, productSelect?.dataset.selectedProduct || productSelect?.value || '');
+                });
+            };
+
             const formatMoney = (value) => {
                 const currency = (currencyInput.value || 'USD').toUpperCase();
+                const numericValue = Number(value || 0);
                 const formatted = new Intl.NumberFormat('en-US', {
-                    minimumFractionDigits: 2,
+                    minimumFractionDigits: Number.isInteger(numericValue) ? 0 : 2,
                     maximumFractionDigits: 2,
-                }).format(Number(value || 0));
+                }).format(numericValue);
 
                 return `${currency} ${formatted}`;
+            };
+
+            const formatPercent = (value) => {
+                const numericValue = Number(value || 0);
+                const formatted = new Intl.NumberFormat('en-US', {
+                    minimumFractionDigits: Number.isInteger(numericValue) ? 0 : 2,
+                    maximumFractionDigits: 2,
+                }).format(numericValue);
+
+                return `${formatted}%`;
             };
 
             const refreshSummary = () => {
@@ -354,10 +524,10 @@
                 summarySales.textContent = formatMoney(totalSales);
                 summaryBuying.textContent = formatMoney(totalBuying);
                 summaryGrossProfit.textContent = formatMoney(grossProfit);
-                summaryGrossMargin.textContent = `${grossMargin.toFixed(2)}%`;
+                summaryGrossMargin.textContent = formatPercent(grossMargin);
                 summaryExtraCost.textContent = formatMoney(extraCost);
                 summaryNetProfit.textContent = formatMoney(netProfit);
-                summaryNetMargin.textContent = `${netMargin.toFixed(2)}%`;
+                summaryNetMargin.textContent = formatPercent(netMargin);
             };
 
             addButton.addEventListener('click', () => {
@@ -366,28 +536,30 @@
                 row.className = 'order-item-row';
                 row.innerHTML = `
                     <td>
-                        <select name="items[${index}][supplier_id]" class="form-select">${supplierOptionsHtml}</select>
+                        <select name="items[${index}][supplier_id]" class="form-select js-supplier-select" required>${supplierOptionsHtml}</select>
                     </td>
                     <td>
-                        <input type="text" name="items[${index}][product_name]" class="form-control" required>
+                        <select name="items[${index}][product_name]" class="form-select js-product-select" disabled required>
+                            <option value="">Select supplier first</option>
+                        </select>
                     </td>
                     <td>
                         <textarea name="items[${index}][specification]" rows="2" class="form-control"></textarea>
                     </td>
                     <td>
-                        <input type="number" step="0.01" min="0.01" name="items[${index}][quantity_kg]" class="form-control js-qty" required>
+                        <input type="text" inputmode="decimal" name="items[${index}][quantity_kg]" class="form-control js-qty js-numeric-input" required>
                     </td>
                     <td>
-                        <input type="number" step="0.01" min="0" name="items[${index}][selling_price]" class="form-control js-selling-price" required>
+                        <input type="text" inputmode="decimal" name="items[${index}][selling_price]" class="form-control js-selling-price js-numeric-input" required>
                     </td>
                     <td>
-                        <input type="number" step="0.01" min="0" name="items[${index}][buying_price]" class="form-control js-buying-price" required>
+                        <input type="text" inputmode="decimal" name="items[${index}][buying_price]" class="form-control js-buying-price js-numeric-input" required>
                     </td>
                     <td>
-                        <div class="fw-semibold js-line-profit">0.00</div>
-                        <small class="text-muted js-line-total-sales">Sales Total: 0.00</small><br>
-                        <small class="text-muted js-line-total-buying">Product Cost Total: 0.00</small><br>
-                        <small class="text-muted js-line-total-profit">Gross Line Profit: 0.00</small>
+                        <div class="fw-semibold js-line-profit">0</div>
+                        <small class="text-muted js-line-total-sales">Sales Total: 0</small><br>
+                        <small class="text-muted js-line-total-buying">Product Cost Total: 0</small><br>
+                        <small class="text-muted js-line-total-profit">Gross Line Profit: 0</small>
                     </td>
                     <td class="text-center">
                         <button type="button" class="btn btn-sm btn-light-danger js-remove-row">Remove</button>
@@ -395,6 +567,8 @@
                 `;
 
                 tableBody.appendChild(row);
+                bindNumericGuards(row);
+                syncProductSelect(row);
                 refreshSummary();
             });
 
@@ -408,12 +582,19 @@
                     removeButton.closest('.order-item-row').querySelectorAll('input, textarea, select').forEach((field) => {
                         field.value = '';
                     });
+                    syncProductSelect(removeButton.closest('.order-item-row'));
                 } else {
                     removeButton.closest('.order-item-row').remove();
                     renumberRows();
                 }
 
                 refreshSummary();
+            });
+
+            tableBody.addEventListener('change', (event) => {
+                if (event.target.matches('.js-supplier-select')) {
+                    syncProductSelect(event.target.closest('.order-item-row'));
+                }
             });
 
             tableBody.addEventListener('input', (event) => {
@@ -424,6 +605,8 @@
 
             extraCostInputs.forEach((input) => input.addEventListener('input', refreshSummary));
             currencyInput.addEventListener('input', refreshSummary);
+            bindNumericGuards();
+            initializeProductSelects();
             refreshSummary();
         });
     </script>

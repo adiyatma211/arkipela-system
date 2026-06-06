@@ -6,10 +6,12 @@ use App\Enums\SupplierStatus;
 use App\Enums\SupplierType;
 use App\Http\Requests\SupplierRequest;
 use App\Models\Supplier;
+use App\Models\SupplierProduct;
 use App\Services\ActivityLogService;
 use App\Services\CodeGeneratorService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class SupplierController extends Controller
@@ -32,7 +34,7 @@ class SupplierController extends Controller
         ];
 
         $suppliers = Supplier::query()
-            ->with('creator')
+            ->with(['creator', 'products'])
             ->when($filters['search'], function ($query, $search) {
                 $query->where(function ($innerQuery) use ($search) {
                     $innerQuery
@@ -40,7 +42,8 @@ class SupplierController extends Controller
                         ->orWhere('supplier_name', 'like', "%{$search}%")
                         ->orWhere('pic_name', 'like', "%{$search}%")
                         ->orWhere('city', 'like', "%{$search}%")
-                        ->orWhere('province', 'like', "%{$search}%");
+                        ->orWhere('province', 'like', "%{$search}%")
+                        ->orWhereHas('products', fn ($productQuery) => $productQuery->where('product_name', 'like', "%{$search}%"));
                 });
             })
             ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
@@ -74,6 +77,7 @@ class SupplierController extends Controller
                 'country' => 'Indonesia',
                 'status' => SupplierStatus::PROSPECT->value,
             ]),
+            'productRows' => $this->emptyProductRows(),
             'statusOptions' => SupplierStatus::options(),
             'typeOptions' => SupplierType::options(),
             'formAction' => route('suppliers.store'),
@@ -88,16 +92,25 @@ class SupplierController extends Controller
     public function store(SupplierRequest $request): RedirectResponse
     {
         $payload = $request->validated();
+        $productRows = $payload['products'];
+        unset($payload['products']);
+
         $payload['supplier_code'] = $this->codeGeneratorService->generateSupplierCode();
         $payload['created_by'] = $request->user()?->id;
+        $payload = array_merge($payload, $this->buildSupplierProductSummary($productRows));
 
-        $supplier = Supplier::query()->create($payload);
+        $supplier = DB::transaction(function () use ($payload, $productRows) {
+            $supplier = Supplier::query()->create($payload);
+            $this->syncSupplierProducts($supplier, $productRows);
+
+            return $supplier->load('products');
+        });
 
         $this->activityLogService->log(
             moduleName: 'suppliers',
             record: $supplier,
             action: 'created',
-            newValue: $supplier->fresh()?->toArray(),
+            newValue: $supplier->fresh(['products'])?->toArray(),
             description: "Supplier {$supplier->supplier_code} created",
         );
 
@@ -114,7 +127,7 @@ class SupplierController extends Controller
         return view('suppliers.show', [
             'pageTitle' => 'Supplier Detail',
             'pageSubtitle' => 'Ringkasan profil supplier dan kelayakan awal untuk sourcing.',
-            'supplier' => $supplier->load('creator'),
+            'supplier' => $supplier->load(['creator', 'products']),
             'statusBadgeMap' => $this->statusBadgeMap(),
             'statusLabelMap' => $this->statusLabelMap(),
             'typeLabelMap' => $this->typeLabelMap(),
@@ -129,7 +142,8 @@ class SupplierController extends Controller
         return view('suppliers.edit', [
             'pageTitle' => 'Edit Supplier',
             'pageSubtitle' => "Update data supplier {$supplier->supplier_code}.",
-            'supplier' => $supplier,
+            'supplier' => $supplier->load('products'),
+            'productRows' => $this->productRowsForForm($supplier->load('products')),
             'statusOptions' => SupplierStatus::options(),
             'typeOptions' => SupplierType::options(),
             'formAction' => route('suppliers.update', $supplier),
@@ -143,15 +157,23 @@ class SupplierController extends Controller
      */
     public function update(SupplierRequest $request, Supplier $supplier): RedirectResponse
     {
-        $oldValue = $supplier->toArray();
-        $supplier->update($request->validated());
+        $oldValue = $supplier->load('products')->toArray();
+        $payload = $request->validated();
+        $productRows = $payload['products'];
+        unset($payload['products']);
+        $payload = array_merge($payload, $this->buildSupplierProductSummary($productRows));
+
+        DB::transaction(function () use ($supplier, $payload, $productRows) {
+            $supplier->update($payload);
+            $this->syncSupplierProducts($supplier, $productRows);
+        });
 
         $this->activityLogService->log(
             moduleName: 'suppliers',
             record: $supplier,
             action: 'updated',
             oldValue: $oldValue,
-            newValue: $supplier->fresh()?->toArray(),
+            newValue: $supplier->fresh(['products'])?->toArray(),
             description: "Supplier {$supplier->supplier_code} updated",
         );
 
@@ -210,5 +232,66 @@ class SupplierController extends Controller
         return collect(SupplierType::options())
             ->pluck('label', 'value')
             ->all();
+    }
+
+    private function productRowsForForm(Supplier $supplier): array
+    {
+        $rows = $supplier->resolvedProducts()
+            ->map(function (SupplierProduct $product) {
+                return [
+                    'product_name' => $product->product_name,
+                    'monthly_capacity_kg' => $product->monthly_capacity_kg,
+                    'minimum_order_kg' => $product->minimum_order_kg,
+                ];
+            })
+            ->values()
+            ->all();
+
+        return $rows !== [] ? $rows : $this->emptyProductRows();
+    }
+
+    private function emptyProductRows(): array
+    {
+        return [[
+            'product_name' => '',
+            'monthly_capacity_kg' => null,
+            'minimum_order_kg' => null,
+        ]];
+    }
+
+    private function syncSupplierProducts(Supplier $supplier, array $productRows): void
+    {
+        $supplier->products()->delete();
+
+        $supplier->products()->createMany(
+            collect($productRows)
+                ->values()
+                ->map(function (array $productRow, int $index) {
+                    return [
+                        'product_name' => $productRow['product_name'],
+                        'monthly_capacity_kg' => $productRow['monthly_capacity_kg'],
+                        'minimum_order_kg' => $productRow['minimum_order_kg'],
+                        'sort_order' => $index,
+                    ];
+                })
+                ->all()
+        );
+    }
+
+    private function buildSupplierProductSummary(array $productRows): array
+    {
+        $rows = collect($productRows);
+        $capacities = $rows->pluck('monthly_capacity_kg')->filter(fn ($value) => $value !== null && $value !== '');
+        $minimumOrders = $rows->pluck('minimum_order_kg')->filter(fn ($value) => $value !== null && $value !== '');
+
+        return [
+            'products_summary' => $rows->pluck('product_name')->filter()->implode(', '),
+            'monthly_capacity_kg' => $capacities->isNotEmpty()
+                ? $capacities->sum(fn ($value) => (float) $value)
+                : null,
+            'minimum_order_kg' => $minimumOrders->isNotEmpty()
+                ? $minimumOrders->min(fn ($value) => (float) $value)
+                : null,
+        ];
     }
 }

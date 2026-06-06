@@ -2,6 +2,13 @@
 @if ($formMethod !== 'POST')
     @method($formMethod)
 @endif
+@php
+    $productRows = old('products', $productRows ?? [[
+        'product_name' => '',
+        'monthly_capacity_kg' => null,
+        'minimum_order_kg' => null,
+    ]]);
+@endphp
 
 <div class="row">
     <div class="col-12 col-lg-6">
@@ -90,24 +97,63 @@
 
     <div class="col-12">
         <div class="mb-3">
-            <label for="products_summary" class="form-label">Products Summary</label>
-            <input type="text" id="products_summary" name="products_summary" class="form-control @error('products_summary') is-invalid @enderror" value="{{ old('products_summary', $supplier->products_summary) }}" placeholder="Example: Clove, Nutmeg, Cinnamon">
-            @error('products_summary')<div class="invalid-feedback">{{ $message }}</div>@enderror
-        </div>
-    </div>
-
-    <div class="col-12 col-lg-6">
-        <div class="mb-3">
-            <label for="monthly_capacity_kg" class="form-label">Monthly Capacity (kg)</label>
-            <input type="number" step="0.01" min="0" id="monthly_capacity_kg" name="monthly_capacity_kg" class="form-control @error('monthly_capacity_kg') is-invalid @enderror" value="{{ old('monthly_capacity_kg', $supplier->monthly_capacity_kg) }}">
-            @error('monthly_capacity_kg')<div class="invalid-feedback">{{ $message }}</div>@enderror
-        </div>
-    </div>
-    <div class="col-12 col-lg-6">
-        <div class="mb-3">
-            <label for="minimum_order_kg" class="form-label">Minimum Order (kg)</label>
-            <input type="number" step="0.01" min="0" id="minimum_order_kg" name="minimum_order_kg" class="form-control @error('minimum_order_kg') is-invalid @enderror" value="{{ old('minimum_order_kg', $supplier->minimum_order_kg) }}">
-            @error('minimum_order_kg')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <label class="form-label mb-0">Supplier Products</label>
+                <button type="button" class="btn btn-sm btn-light-primary" data-product-add>Add Product</button>
+            </div>
+            <div class="border rounded-3 p-3">
+                <div id="supplier-products-wrapper" data-next-index="{{ count($productRows) }}">
+                    @foreach ($productRows as $index => $productRow)
+                        <div class="border rounded-3 p-3 mb-3 supplier-product-row" data-product-row>
+                            <div class="row g-3 align-items-end">
+                                <div class="col-12 col-lg-5">
+                                    <label class="form-label">Product Name</label>
+                                    <input
+                                        type="text"
+                                        name="products[{{ $index }}][product_name]"
+                                        class="form-control @error("products.$index.product_name") is-invalid @enderror"
+                                        value="{{ data_get($productRow, 'product_name') }}"
+                                        placeholder="Example: Clove"
+                                        required
+                                    >
+                                    @error("products.$index.product_name")<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-12 col-lg-3">
+                                    <label class="form-label">Monthly Capacity (kg)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        name="products[{{ $index }}][monthly_capacity_kg]"
+                                        class="form-control @error("products.$index.monthly_capacity_kg") is-invalid @enderror"
+                                        value="{{ data_get($productRow, 'monthly_capacity_kg') }}"
+                                    >
+                                    @error("products.$index.monthly_capacity_kg")<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-12 col-lg-3">
+                                    <label class="form-label">Minimum Order (kg)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        name="products[{{ $index }}][minimum_order_kg]"
+                                        class="form-control @error("products.$index.minimum_order_kg") is-invalid @enderror"
+                                        value="{{ data_get($productRow, 'minimum_order_kg') }}"
+                                    >
+                                    @error("products.$index.minimum_order_kg")<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-12 col-lg-1">
+                                    <button type="button" class="btn btn-light-danger w-100" data-product-remove>Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                @error('products')<div class="text-danger small">{{ $message }}</div>@enderror
+                <div class="form-text mt-2">
+                    Satu supplier bisa punya beberapa product, dan setiap product punya capacity serta minimum order sendiri.
+                </div>
+            </div>
         </div>
     </div>
 
@@ -139,3 +185,68 @@
     <a href="{{ route('suppliers.index') }}" class="btn btn-light">Cancel</a>
     <button type="submit" class="btn btn-primary">{{ $submitLabel }}</button>
 </div>
+
+<template id="supplier-product-template">
+    <div class="border rounded-3 p-3 mb-3 supplier-product-row" data-product-row>
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-lg-5">
+                <label class="form-label">Product Name</label>
+                <input type="text" name="products[__INDEX__][product_name]" class="form-control" placeholder="Example: Clove" required>
+            </div>
+            <div class="col-12 col-lg-3">
+                <label class="form-label">Monthly Capacity (kg)</label>
+                <input type="number" step="0.01" min="0" name="products[__INDEX__][monthly_capacity_kg]" class="form-control">
+            </div>
+            <div class="col-12 col-lg-3">
+                <label class="form-label">Minimum Order (kg)</label>
+                <input type="number" step="0.01" min="0" name="products[__INDEX__][minimum_order_kg]" class="form-control">
+            </div>
+            <div class="col-12 col-lg-1">
+                <button type="button" class="btn btn-light-danger w-100" data-product-remove>Remove</button>
+            </div>
+        </div>
+    </div>
+</template>
+
+@push('scripts')
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const wrapper = document.getElementById('supplier-products-wrapper');
+            const template = document.getElementById('supplier-product-template');
+            const addButton = document.querySelector('[data-product-add]');
+
+            if (!wrapper || !template || !addButton) {
+                return;
+            }
+
+            const createRow = function (index) {
+                return template.innerHTML.replaceAll('__INDEX__', String(index));
+            };
+
+            const ensureOneRow = function () {
+                if (wrapper.querySelectorAll('[data-product-row]').length === 0) {
+                    const index = Number(wrapper.dataset.nextIndex || 0);
+                    wrapper.insertAdjacentHTML('beforeend', createRow(index));
+                    wrapper.dataset.nextIndex = String(index + 1);
+                }
+            };
+
+            addButton.addEventListener('click', function () {
+                const index = Number(wrapper.dataset.nextIndex || 0);
+                wrapper.insertAdjacentHTML('beforeend', createRow(index));
+                wrapper.dataset.nextIndex = String(index + 1);
+            });
+
+            wrapper.addEventListener('click', function (event) {
+                const removeButton = event.target.closest('[data-product-remove]');
+
+                if (!removeButton) {
+                    return;
+                }
+
+                removeButton.closest('[data-product-row]')?.remove();
+                ensureOneRow();
+            });
+        });
+    </script>
+@endpush

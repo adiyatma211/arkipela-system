@@ -37,9 +37,10 @@ class SupplierRequest extends FormRequest
             'city' => ['nullable', 'string', 'max:255'],
             'province' => ['nullable', 'string', 'max:255'],
             'country' => ['nullable', 'string', 'max:255'],
-            'products_summary' => ['nullable', 'string', 'max:255'],
-            'monthly_capacity_kg' => ['nullable', 'numeric', 'min:0'],
-            'minimum_order_kg' => ['nullable', 'numeric', 'min:0'],
+            'products' => ['required', 'array', 'min:1'],
+            'products.*.product_name' => ['required', 'string', 'max:255'],
+            'products.*.monthly_capacity_kg' => ['nullable', 'numeric', 'min:0'],
+            'products.*.minimum_order_kg' => ['nullable', 'numeric', 'min:0'],
             'payment_term' => ['nullable', 'string', 'max:255'],
             'legal_status' => ['nullable', 'string', 'max:255'],
             'status' => ['required', Rule::in(SupplierStatus::values())],
@@ -56,7 +57,21 @@ class SupplierRequest extends FormRequest
             'city' => $this->string('city')->trim()->toString(),
             'province' => $this->string('province')->trim()->toString(),
             'country' => $this->filled('country') ? $this->string('country')->trim()->toString() : 'Indonesia',
-            'products_summary' => $this->string('products_summary')->trim()->toString(),
+            'products' => collect($this->input('products', []))
+                ->map(function ($product) {
+                    return [
+                        'product_name' => trim((string) data_get($product, 'product_name')),
+                        'monthly_capacity_kg' => filled(data_get($product, 'monthly_capacity_kg'))
+                            ? data_get($product, 'monthly_capacity_kg')
+                            : null,
+                        'minimum_order_kg' => filled(data_get($product, 'minimum_order_kg'))
+                            ? data_get($product, 'minimum_order_kg')
+                            : null,
+                    ];
+                })
+                ->filter(fn (array $product) => $product['product_name'] !== '' || filled($product['monthly_capacity_kg']) || filled($product['minimum_order_kg']))
+                ->values()
+                ->all(),
             'payment_term' => $this->string('payment_term')->trim()->toString(),
             'legal_status' => $this->string('legal_status')->trim()->toString(),
         ]);

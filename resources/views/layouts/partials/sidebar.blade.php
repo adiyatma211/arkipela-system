@@ -1,9 +1,13 @@
 @php
+    $user = auth()->user();
+    $user?->loadMissing('role.permissions');
     $menuItems = [
-        ['label' => 'Dashboard', 'route' => 'dashboard', 'icon' => 'bi-grid-fill'],
-        ['label' => 'Suppliers', 'route' => 'suppliers.index', 'icon' => 'bi-people-fill'],
-        ['label' => 'Clients', 'route' => 'clients.index', 'icon' => 'bi-person-badge-fill'],
-        ['label' => 'Orders', 'route' => 'orders.index', 'icon' => 'bi-journal-check'],
+        ['label' => 'Dashboard', 'route' => 'dashboard', 'match' => 'dashboard', 'icon' => 'bi-grid-fill', 'permissions' => [\App\Enums\UserPermission::DASHBOARD_VIEW->value]],
+        ['label' => 'Suppliers', 'route' => 'suppliers.index', 'match' => 'suppliers.*', 'icon' => 'bi-people-fill', 'permissions' => [\App\Enums\UserPermission::SUPPLIERS_VIEW->value, \App\Enums\UserPermission::SUPPLIERS_MANAGE->value]],
+        ['label' => 'Clients', 'route' => 'clients.index', 'match' => 'clients.*', 'icon' => 'bi-person-badge-fill', 'permissions' => [\App\Enums\UserPermission::CLIENTS_VIEW->value, \App\Enums\UserPermission::CLIENTS_MANAGE->value]],
+        ['label' => 'Orders', 'route' => 'orders.index', 'match' => 'orders.*', 'icon' => 'bi-journal-check', 'permissions' => [\App\Enums\UserPermission::ORDERS_VIEW->value, \App\Enums\UserPermission::ORDERS_MANAGE->value]],
+        ['label' => 'Users', 'route' => 'settings.users.index', 'match' => 'settings.users.*', 'icon' => 'bi-person-lines-fill', 'permissions' => [\App\Enums\UserPermission::USERS_VIEW->value, \App\Enums\UserPermission::USERS_MANAGE->value]],
+        ['label' => 'Settings', 'route' => 'settings.roles.index', 'match' => 'settings.roles.*', 'icon' => 'bi-shield-lock-fill', 'permissions' => [\App\Enums\UserPermission::SETTINGS_MANAGE->value]],
     ];
 @endphp
 
@@ -26,7 +30,8 @@
                 <li class="sidebar-title">Main Menu</li>
 
                 @foreach ($menuItems as $item)
-                    <li class="sidebar-item {{ request()->routeIs($item['route']) ? 'active' : '' }}">
+                    @continue(! $user?->hasAnyPermission($item['permissions']))
+                    <li class="sidebar-item {{ request()->routeIs($item['match']) ? 'active' : '' }}">
                         <a href="{{ route($item['route']) }}" class="sidebar-link">
                             <i class="bi {{ $item['icon'] }}"></i>
                             <span>{{ $item['label'] }}</span>

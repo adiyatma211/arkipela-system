@@ -73,6 +73,11 @@
                                 </thead>
                                 <tbody>
                                     @forelse ($suppliers as $supplier)
+                                        @php
+                                            $products = $supplier->resolvedProducts();
+                                            $productsSummary = $supplier->resolvedProductsSummary();
+                                            $totalCapacity = $supplier->resolvedMonthlyCapacityKg();
+                                        @endphp
                                         <tr>
                                             <td class="font-semibold">{{ $supplier->supplier_code }}</td>
                                             <td>
@@ -84,8 +89,11 @@
                                                 <div>{{ $supplier->city ?: '-' }}</div>
                                                 <small class="text-muted">{{ $supplier->province ?: $supplier->country }}</small>
                                             </td>
-                                            <td>{{ $supplier->products_summary ?: '-' }}</td>
-                                            <td>{{ $supplier->monthly_capacity_kg ? number_format((float) $supplier->monthly_capacity_kg, 0) . ' kg' : '-' }}</td>
+                                            <td>
+                                                <div>{{ $productsSummary ?: '-' }}</div>
+                                                <small class="text-muted">{{ $products->count() }} product</small>
+                                            </td>
+                                            <td>{{ $totalCapacity !== null ? number_format($totalCapacity, 0) . ' kg' : '-' }}</td>
                                             <td>
                                                 <span class="badge {{ $statusBadgeMap[$supplier->status] ?? 'bg-secondary' }}">
                                                     {{ $statusLabelMap[$supplier->status] ?? ucfirst(str_replace('_', ' ', $supplier->status)) }}

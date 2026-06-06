@@ -244,12 +244,13 @@ class OrderController extends Controller
     private function availableSuppliers()
     {
         return Supplier::query()
+            ->with('products')
             ->whereIn('status', [
                 SupplierStatus::APPROVED->value,
                 SupplierStatus::ACTIVE->value,
             ])
             ->orderBy('supplier_name')
-            ->get(['id', 'supplier_name', 'supplier_code', 'status']);
+            ->get(['id', 'supplier_name', 'supplier_code', 'status', 'products_summary', 'monthly_capacity_kg', 'minimum_order_kg']);
     }
 
     private function emptyItem(): array

@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\OrderStatus;
 use App\Enums\SupplierStatus;
+use App\Models\Supplier;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -48,7 +49,7 @@ class OrderRequest extends FormRequest
             'notes' => ['nullable', 'string'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.supplier_id' => [
-                'nullable',
+                'required',
                 Rule::exists('suppliers', 'id')->where(fn ($query) => $query->whereIn('status', [
                     SupplierStatus::APPROVED->value,
                     SupplierStatus::ACTIVE->value,
@@ -93,5 +94,50 @@ class OrderRequest extends FormRequest
             'payment_term' => $this->string('payment_term')->trim()->toString(),
             'items' => $items,
         ]);
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            $items = $this->input('items', []);
+            $supplierIds = collect($items)
+                ->pluck('supplier_id')
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($supplierIds->isEmpty()) {
+                return;
+            }
+
+            $suppliers = Supplier::query()
+                ->with('products')
+                ->whereIn('id', $supplierIds)
+                ->get()
+                ->keyBy('id');
+
+            foreach ($items as $index => $item) {
+                $supplierId = data_get($item, 'supplier_id');
+                $productName = trim((string) data_get($item, 'product_name'));
+
+                if (! $supplierId || $productName === '') {
+                    continue;
+                }
+
+                $supplier = $suppliers->get((int) $supplierId);
+                $validProducts = $supplier?->resolvedProducts()
+                    ->pluck('product_name')
+                    ->filter()
+                    ->map(fn (string $name) => trim($name))
+                    ->all() ?? [];
+
+                if (! in_array($productName, $validProducts, true)) {
+                    $validator->errors()->add(
+                        "items.$index.product_name",
+                        'Selected product is not available for the chosen supplier.'
+                    );
+                }
+            }
+        });
     }
 }

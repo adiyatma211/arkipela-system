@@ -25,7 +25,7 @@ class AuthenticatedSessionController extends Controller
             'last_login_at' => now(),
         ])->save();
 
-        return redirect()->intended(route('dashboard'))
+        return redirect()->intended(route($request->user()?->homeRoute() ?? 'login'))
             ->with('status', 'Welcome back to Archipela Web.');
     }
 
