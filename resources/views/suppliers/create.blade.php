@@ -9,7 +9,7 @@
                         <h4>Supplier Form</h4>
                     </div>
                     <div class="card-body">
-                        <form action="{{ $formAction }}" method="POST">
+                        <form action="{{ $formAction }}" method="POST" enctype="multipart/form-data">
                             @include('suppliers._form')
                         </form>
                     </div>

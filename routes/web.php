@@ -92,6 +92,15 @@ Route::middleware('auth')->group(function (): void {
         Route::put('/{supplier}', 'update')
             ->middleware('permission:' . UserPermission::SUPPLIERS_MANAGE->value)
             ->name('update');
+        Route::patch('/{supplier}/submit', 'submitForApproval')
+            ->middleware('permission:' . UserPermission::SUPPLIERS_MANAGE->value)
+            ->name('submit');
+        Route::patch('/{supplier}/approve', 'approve')
+            ->middleware('auth')
+            ->name('approve');
+        Route::patch('/{supplier}/reject', 'reject')
+            ->middleware('auth')
+            ->name('reject');
         Route::delete('/{supplier}', 'destroy')
             ->middleware('permission:' . UserPermission::SUPPLIERS_MANAGE->value)
             ->name('destroy');
@@ -149,6 +158,15 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/{order}/edit', 'edit')
             ->middleware('permission:' . UserPermission::ORDERS_MANAGE->value)
             ->name('edit');
+        Route::patch('/{order}/documents/{document}/generate', 'generateDocument')
+            ->middleware('permission:' . UserPermission::ORDERS_MANAGE->value)
+            ->name('documents.generate');
+        Route::get('/{order}/documents/{document}/preview', 'previewDocument')
+            ->middleware('permission:' . implode(',', [
+                UserPermission::ORDERS_VIEW->value,
+                UserPermission::ORDERS_MANAGE->value,
+            ]))
+            ->name('documents.preview');
         Route::put('/{order}', 'update')
             ->middleware('permission:' . UserPermission::ORDERS_MANAGE->value)
             ->name('update');

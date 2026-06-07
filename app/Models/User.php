@@ -153,6 +153,21 @@ class User extends Authenticatable
         return $this->hasMany(Supplier::class, 'created_by');
     }
 
+    public function submittedSuppliers(): HasMany
+    {
+        return $this->hasMany(Supplier::class, 'submitted_by');
+    }
+
+    public function approvedSuppliers(): HasMany
+    {
+        return $this->hasMany(Supplier::class, 'approved_by');
+    }
+
+    public function rejectedSuppliers(): HasMany
+    {
+        return $this->hasMany(Supplier::class, 'rejected_by');
+    }
+
     public function createdClients(): HasMany
     {
         return $this->hasMany(Client::class, 'created_by');

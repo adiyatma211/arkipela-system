@@ -8,6 +8,13 @@
         'monthly_capacity_kg' => null,
         'minimum_order_kg' => null,
     ]]);
+    $photoRows = old('photos', []);
+    $nextPhotoIndex = $photoRows !== []
+        ? (collect(array_keys($photoRows))->max() + 1)
+        : 0;
+    $existingPhotos = $supplier->relationLoaded('photos')
+        ? $supplier->photos
+        : collect();
 @endphp
 
 <div class="row">
@@ -55,13 +62,37 @@
     </div>
     <div class="col-12 col-lg-6">
         <div class="mb-3">
-            <label for="status" class="form-label">Status</label>
-            <select id="status" name="status" class="form-select @error('status') is-invalid @enderror" required>
-                @foreach ($statusOptions as $option)
-                    <option value="{{ $option['value'] }}" @selected(old('status', $supplier->status) === $option['value'])>{{ $option['label'] }}</option>
-                @endforeach
-            </select>
-            @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            <label class="form-label">Owner Approval</label>
+            <div class="border rounded-3 px-3 py-2">
+                <span class="badge {{ $approvalBadgeMap[old('approval_status', $supplier->approval_status ?: 'pending')] ?? 'bg-secondary' }}">
+                    {{ $approvalLabelMap[old('approval_status', $supplier->approval_status ?: 'pending')] ?? 'Pending Approval' }}
+                </span>
+                <div class="form-text mt-2 mb-0">
+                    Supplier baru atau perubahan data penting akan menunggu approval owner sebelum dipakai penuh di sistem.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-6">
+        <div class="mb-3">
+            <label for="status" class="form-label">Operational Status</label>
+            @if ($canManageOperationalStatus)
+                <select id="status" name="status" class="form-select @error('status') is-invalid @enderror" required>
+                    @foreach ($statusOptions as $option)
+                        <option value="{{ $option['value'] }}" @selected(old('status', $supplier->status) === $option['value'])>{{ $option['label'] }}</option>
+                    @endforeach
+                </select>
+                @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            @else
+                <input type="hidden" name="status" value="{{ old('status', $supplier->status ?: 'prospect') }}">
+                <div class="border rounded-3 px-3 py-2">
+                    <div class="fw-semibold">{{ $statusLabelMap[old('status', $supplier->status ?: 'prospect')] ?? 'Prospect' }}</div>
+                    <div class="form-text mt-2 mb-0">
+                        Hanya owner yang bisa mengubah status operasional supplier.
+                    </div>
+                </div>
+            @endif
         </div>
     </div>
 
@@ -179,6 +210,94 @@
             @error('notes')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
     </div>
+
+    <div class="col-12">
+        <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <label class="form-label mb-0">Supplier Photo Evidence</label>
+                <button type="button" class="btn btn-sm btn-light-primary" data-photo-add>Add Photo</button>
+            </div>
+
+            @if ($existingPhotos->isNotEmpty())
+                <div class="border rounded-3 p-3 mb-3">
+                    <div class="fw-semibold mb-3">Existing Photos</div>
+                    <div class="row g-3">
+                        @foreach ($existingPhotos as $photo)
+                            <div class="col-12 col-md-6 col-xl-3">
+                                <div class="border rounded-3 h-100 overflow-hidden">
+                                    <img
+                                        src="{{ $photo->photoUrl() }}"
+                                        alt="{{ $photoTypeLabelMap[$photo->photo_type] ?? $photo->photo_type }}"
+                                        class="w-100 image-preview-trigger"
+                                        style="height: 180px; object-fit: cover;"
+                                        data-image-preview-trigger
+                                        data-preview-src="{{ $photo->photoUrl() }}"
+                                        data-preview-title="{{ $photoTypeLabelMap[$photo->photo_type] ?? $photo->photo_type }}"
+                                        data-preview-caption="{{ $photo->caption ?: 'Tanpa caption' }}"
+                                    >
+                                    <div class="p-3">
+                                        <div class="fw-semibold mb-1">{{ $photoTypeLabelMap[$photo->photo_type] ?? $photo->photo_type }}</div>
+                                        <div class="text-muted small mb-2">{{ $photo->caption ?: 'Tanpa caption' }}</div>
+                                        <div class="form-check">
+                                            <input
+                                                type="checkbox"
+                                                id="delete_photo_{{ $photo->id }}"
+                                                name="existing_photos_to_delete[]"
+                                                value="{{ $photo->id }}"
+                                                class="form-check-input"
+                                                @checked(in_array((string) $photo->id, collect(old('existing_photos_to_delete', []))->map(fn ($value) => (string) $value)->all(), true))
+                                            >
+                                            <label for="delete_photo_{{ $photo->id }}" class="form-check-label">Hapus foto ini</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                    @error('existing_photos_to_delete')<div class="text-danger small mt-2">{{ $message }}</div>@enderror
+                    @error('existing_photos_to_delete.*')<div class="text-danger small mt-2">{{ $message }}</div>@enderror
+                </div>
+            @endif
+
+            <div class="border rounded-3 p-3">
+                <div id="supplier-photos-wrapper" data-next-index="{{ $nextPhotoIndex }}">
+                    @foreach ($photoRows as $index => $photoRow)
+                        <div class="border rounded-3 p-3 mb-3 supplier-photo-row" data-photo-row>
+                            <div class="row g-3 align-items-end">
+                                <div class="col-12 col-lg-4">
+                                    <label class="form-label">Photo File</label>
+                                    <input type="file" name="photos[{{ $index }}][file]" class="form-control @error("photos.$index.file") is-invalid @enderror" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+                                    @error("photos.$index.file")<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-12 col-lg-3">
+                                    <label class="form-label">Photo Type</label>
+                                    <select name="photos[{{ $index }}][photo_type]" class="form-select @error("photos.$index.photo_type") is-invalid @enderror">
+                                        <option value="">Select photo type</option>
+                                        @foreach ($photoOptions as $option)
+                                            <option value="{{ $option['value'] }}" @selected(data_get($photoRow, 'photo_type') === $option['value'])>{{ $option['label'] }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error("photos.$index.photo_type")<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-12 col-lg-4">
+                                    <label class="form-label">Caption</label>
+                                    <input type="text" name="photos[{{ $index }}][caption]" class="form-control @error("photos.$index.caption") is-invalid @enderror" value="{{ data_get($photoRow, 'caption') }}" placeholder="Example: Front warehouse view">
+                                    @error("photos.$index.caption")<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-12 col-lg-1">
+                                    <button type="button" class="btn btn-light-danger w-100" data-photo-remove>Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                @error('photos')<div class="text-danger small">{{ $message }}</div>@enderror
+                <div class="form-text mt-2">
+                    Format: JPG, JPEG, PNG, WEBP. Maksimal 5 MB per file. Jika validasi gagal, file perlu dipilih ulang.
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="d-flex justify-content-end gap-2">
@@ -208,44 +327,97 @@
     </div>
 </template>
 
+<template id="supplier-photo-template">
+    <div class="border rounded-3 p-3 mb-3 supplier-photo-row" data-photo-row>
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-lg-4">
+                <label class="form-label">Photo File</label>
+                <input type="file" name="photos[__INDEX__][file]" class="form-control" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+            </div>
+            <div class="col-12 col-lg-3">
+                <label class="form-label">Photo Type</label>
+                <select name="photos[__INDEX__][photo_type]" class="form-select">
+                    <option value="">Select photo type</option>
+                    @foreach ($photoOptions as $option)
+                        <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-12 col-lg-4">
+                <label class="form-label">Caption</label>
+                <input type="text" name="photos[__INDEX__][caption]" class="form-control" placeholder="Example: Front warehouse view">
+            </div>
+            <div class="col-12 col-lg-1">
+                <button type="button" class="btn btn-light-danger w-100" data-photo-remove>Remove</button>
+            </div>
+        </div>
+    </div>
+</template>
+
+@include('partials.image-preview-modal')
+
 @push('scripts')
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            const wrapper = document.getElementById('supplier-products-wrapper');
-            const template = document.getElementById('supplier-product-template');
-            const addButton = document.querySelector('[data-product-add]');
+            const setupDynamicRows = function (options) {
+                const wrapper = document.getElementById(options.wrapperId);
+                const template = document.getElementById(options.templateId);
+                const addButton = document.querySelector(options.addButtonSelector);
 
-            if (!wrapper || !template || !addButton) {
-                return;
-            }
-
-            const createRow = function (index) {
-                return template.innerHTML.replaceAll('__INDEX__', String(index));
-            };
-
-            const ensureOneRow = function () {
-                if (wrapper.querySelectorAll('[data-product-row]').length === 0) {
-                    const index = Number(wrapper.dataset.nextIndex || 0);
-                    wrapper.insertAdjacentHTML('beforeend', createRow(index));
-                    wrapper.dataset.nextIndex = String(index + 1);
-                }
-            };
-
-            addButton.addEventListener('click', function () {
-                const index = Number(wrapper.dataset.nextIndex || 0);
-                wrapper.insertAdjacentHTML('beforeend', createRow(index));
-                wrapper.dataset.nextIndex = String(index + 1);
-            });
-
-            wrapper.addEventListener('click', function (event) {
-                const removeButton = event.target.closest('[data-product-remove]');
-
-                if (!removeButton) {
+                if (!wrapper || !template || !addButton) {
                     return;
                 }
 
-                removeButton.closest('[data-product-row]')?.remove();
-                ensureOneRow();
+                const createRow = function (index) {
+                    return template.innerHTML.replaceAll('__INDEX__', String(index));
+                };
+
+                const ensureMinimumRows = function () {
+                    if (!options.ensureOneRow) {
+                        return;
+                    }
+
+                    if (wrapper.querySelectorAll(options.rowSelector).length === 0) {
+                        const index = Number(wrapper.dataset.nextIndex || 0);
+                        wrapper.insertAdjacentHTML('beforeend', createRow(index));
+                        wrapper.dataset.nextIndex = String(index + 1);
+                    }
+                };
+
+                addButton.addEventListener('click', function () {
+                    const index = Number(wrapper.dataset.nextIndex || 0);
+                    wrapper.insertAdjacentHTML('beforeend', createRow(index));
+                    wrapper.dataset.nextIndex = String(index + 1);
+                });
+
+                wrapper.addEventListener('click', function (event) {
+                    const removeButton = event.target.closest(options.removeButtonSelector);
+
+                    if (!removeButton) {
+                        return;
+                    }
+
+                    removeButton.closest(options.rowSelector)?.remove();
+                    ensureMinimumRows();
+                });
+            };
+
+            setupDynamicRows({
+                wrapperId: 'supplier-products-wrapper',
+                templateId: 'supplier-product-template',
+                addButtonSelector: '[data-product-add]',
+                removeButtonSelector: '[data-product-remove]',
+                rowSelector: '[data-product-row]',
+                ensureOneRow: true,
+            });
+
+            setupDynamicRows({
+                wrapperId: 'supplier-photos-wrapper',
+                templateId: 'supplier-photo-template',
+                addButtonSelector: '[data-photo-add]',
+                removeButtonSelector: '[data-photo-remove]',
+                rowSelector: '[data-photo-row]',
+                ensureOneRow: false,
             });
         });
     </script>

@@ -6,6 +6,7 @@
         $productsSummary = $supplier->resolvedProductsSummary();
         $totalCapacity = $supplier->resolvedMonthlyCapacityKg();
         $minimumOrder = $supplier->resolvedMinimumOrderKg();
+        $photos = $supplier->photos;
     @endphp
     <div class="page-content">
         <section class="row">
@@ -16,7 +17,10 @@
                             <h4 class="mb-1">{{ $supplier->supplier_name }}</h4>
                             <small class="text-muted">{{ $supplier->supplier_code }}</small>
                         </div>
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 flex-wrap justify-content-end">
+                            <span class="badge {{ $approvalBadgeMap[$supplier->approval_status] ?? 'bg-secondary' }}">
+                                {{ $approvalLabelMap[$supplier->approval_status] ?? ucfirst(str_replace('_', ' ', $supplier->approval_status)) }}
+                            </span>
                             <span class="badge {{ $statusBadgeMap[$supplier->status] ?? 'bg-secondary' }}">
                                 {{ $statusLabelMap[$supplier->status] ?? ucfirst(str_replace('_', ' ', $supplier->status)) }}
                             </span>
@@ -111,6 +115,37 @@
                             </div>
                             <div class="col-12">
                                 <div class="mb-4">
+                                    <small class="text-muted d-block mb-2">Photo Evidence</small>
+                                    @if ($photos->isNotEmpty())
+                                        <div class="row g-3">
+                                            @foreach ($photos as $photo)
+                                                <div class="col-12 col-md-6 col-xl-4">
+                                                    <div class="border rounded-3 h-100 overflow-hidden">
+                                                        <img
+                                                            src="{{ $photo->photoUrl() }}"
+                                                            alt="{{ $photoTypeLabelMap[$photo->photo_type] ?? $photo->photo_type }}"
+                                                            class="w-100 image-preview-trigger"
+                                                            style="height: 220px; object-fit: cover;"
+                                                            data-image-preview-trigger
+                                                            data-preview-src="{{ $photo->photoUrl() }}"
+                                                            data-preview-title="{{ $photoTypeLabelMap[$photo->photo_type] ?? $photo->photo_type }}"
+                                                            data-preview-caption="{{ $photo->caption ?: 'Tanpa caption' }}"
+                                                        >
+                                                        <div class="p-3">
+                                                            <div class="fw-semibold mb-1">{{ $photoTypeLabelMap[$photo->photo_type] ?? $photo->photo_type }}</div>
+                                                            <div class="text-muted small">{{ $photo->caption ?: 'Tanpa caption' }}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <div class="font-semibold">-</div>
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-4">
                                     <small class="text-muted d-block mb-2">Product Breakdown</small>
                                     @if ($products->isNotEmpty())
                                         <div class="table-responsive">
@@ -158,19 +193,61 @@
                         <div class="list-group">
                             <div class="list-group-item">
                                 <small class="text-muted d-block">Approval Rule</small>
-                                <span class="font-semibold">Only Approved or Active suppliers can be used in orders later.</span>
+                                <span class="font-semibold">Supplier must be owner-approved and have operational status Approved or Active before it can be used in orders.</span>
                             </div>
                             <div class="list-group-item">
                                 <small class="text-muted d-block">Data Completeness</small>
-                                <span class="font-semibold">{{ $supplier->email && $supplier->phone && $products->isNotEmpty() ? 'Good' : 'Needs enrichment' }}</span>
+                                <span class="font-semibold">{{ $supplier->email && $supplier->phone && $products->isNotEmpty() && $photos->isNotEmpty() ? 'Good' : 'Needs enrichment' }}</span>
+                            </div>
+                            <div class="list-group-item">
+                                <small class="text-muted d-block">Approval Status</small>
+                                <span class="font-semibold">{{ $approvalLabelMap[$supplier->approval_status] ?? '-' }}</span>
+                                <div class="text-muted small mt-1">
+                                    @if ($supplier->approval_status === 'approved')
+                                        Approved by {{ $supplier->approver?->name ?: '-' }}{{ $supplier->approved_at ? ' on ' . $supplier->approved_at->format('d M Y H:i') : '' }}
+                                    @elseif ($supplier->approval_status === 'rejected')
+                                        Rejected by {{ $supplier->rejector?->name ?: '-' }}{{ $supplier->rejected_at ? ' on ' . $supplier->rejected_at->format('d M Y H:i') : '' }}
+                                    @else
+                                        Submitted by {{ $supplier->submitter?->name ?: $supplier->creator?->name ?: '-' }}{{ $supplier->submitted_at ? ' on ' . $supplier->submitted_at->format('d M Y H:i') : '' }}
+                                    @endif
+                                </div>
                             </div>
                             <div class="list-group-item">
                                 <small class="text-muted d-block">Status</small>
                                 <span class="font-semibold">{{ $statusLabelMap[$supplier->status] ?? '-' }}</span>
                             </div>
+                            @if ($supplier->rejection_reason)
+                                <div class="list-group-item">
+                                    <small class="text-muted d-block">Rejection Reason</small>
+                                    <span class="font-semibold">{{ $supplier->rejection_reason }}</span>
+                                </div>
+                            @endif
                         </div>
 
                         <div class="d-grid gap-2 mt-4">
+                            @if ($canApproveSupplier && $supplier->approval_status === 'pending')
+                                <form action="{{ route('suppliers.approve', $supplier) }}" method="POST">
+                                    @csrf
+                                    @method('PATCH')
+                                    <button type="submit" class="btn btn-success w-100">Approve Supplier</button>
+                                </form>
+                                <form action="{{ route('suppliers.reject', $supplier) }}" method="POST" class="d-grid gap-2">
+                                    @csrf
+                                    @method('PATCH')
+                                    <textarea name="rejection_reason" rows="3" class="form-control @error('rejection_reason') is-invalid @enderror" placeholder="Tuliskan alasan reject agar procurement bisa revisi.">{{ old('rejection_reason') }}</textarea>
+                                    @error('rejection_reason')<div class="text-danger small">{{ $message }}</div>@enderror
+                                    <button type="submit" class="btn btn-danger w-100">Reject Supplier</button>
+                                </form>
+                            @endif
+                            @if ($canSubmitSupplier && in_array($supplier->approval_status, ['rejected', 'pending'], true))
+                                <form action="{{ route('suppliers.submit', $supplier) }}" method="POST">
+                                    @csrf
+                                    @method('PATCH')
+                                    <button type="submit" class="btn btn-warning w-100">
+                                        {{ $supplier->approval_status === 'rejected' ? 'Resubmit for Approval' : 'Refresh Submission Timestamp' }}
+                                    </button>
+                                </form>
+                            @endif
                             <a href="{{ route('suppliers.edit', $supplier) }}" class="btn btn-primary">Edit Supplier</a>
                             <a href="{{ route('suppliers.index') }}" class="btn btn-light">Back to List</a>
                         </div>
@@ -179,4 +256,6 @@
             </div>
         </section>
     </div>
+
+    @include('partials.image-preview-modal')
 @endsection

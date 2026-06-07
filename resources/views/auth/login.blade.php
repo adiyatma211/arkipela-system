@@ -9,16 +9,11 @@
             text-decoration: none;
         }
 
-        .archipela-auth-logo-mark {
+        .archipela-auth-logo-media {
             width: 2.6rem;
             height: 2.6rem;
             border-radius: 0.8rem;
-            background: linear-gradient(135deg, #41bbdd 0%, #435ebe 100%);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-size: 1.2rem;
+            object-fit: cover;
             box-shadow: 0 12px 28px rgba(67, 94, 190, 0.22);
         }
 
@@ -132,9 +127,7 @@
             <div id="auth-left">
                 <div class="auth-logo mb-4">
                     <a href="{{ route('login') }}" class="archipela-auth-logo">
-                        <span class="archipela-auth-logo-mark">
-                            <i class="bi bi-grid-1x2-fill"></i>
-                        </span>
+                        <img src="{{ asset('assetes/logo/logo.png') }}" alt="Archipela Logo" class="archipela-auth-logo-media">
                         <span class="archipela-auth-logo-text">Archipela Web</span>
                     </a>
                 </div>

@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use App\Enums\OrderDocumentType;
 use App\Models\Client;
 use App\Models\Order;
 use App\Models\Supplier;
+use InvalidArgumentException;
 
 class CodeGeneratorService
 {
@@ -30,5 +32,24 @@ class CodeGeneratorService
         $nextId = $lastId + 1;
 
         return 'ORD-'.str_pad((string) $nextId, 4, '0', STR_PAD_LEFT);
+    }
+
+    public function generateOrderDocumentNumber(OrderDocumentType $documentType, int $documentId, ?int $year = null): string
+    {
+        if ($documentId < 1) {
+            throw new InvalidArgumentException('Document ID must be greater than zero.');
+        }
+
+        $prefix = match ($documentType) {
+            OrderDocumentType::COMMERCIAL_INVOICE => 'CI',
+            OrderDocumentType::PACKING_LIST => 'PL',
+        };
+
+        return sprintf(
+            '%s-%s-%05d',
+            $prefix,
+            $year ?? (int) now()->format('Y'),
+            $documentId
+        );
     }
 }

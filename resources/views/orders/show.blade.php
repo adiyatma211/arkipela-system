@@ -1,6 +1,9 @@
 @extends('layouts.app')
 
 @section('content')
+    @php
+        $documentsChecklist = $order->mandatoryDocumentsChecklist();
+    @endphp
     <div class="page-content">
         <section class="row">
             <div class="col-12 col-lg-8">
@@ -123,6 +126,87 @@
                             <small class="text-muted d-block mb-1">Notes</small>
                             <div class="font-semibold">{{ $order->notes ?: '-' }}</div>
                         </div>
+
+                        <div class="mt-4">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                <div>
+                                    <small class="text-muted d-block mb-1">Order Documents</small>
+                                    <div class="font-semibold">Mandatory shipping document checklist</div>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-bordered align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Document Type</th>
+                                            <th>Status</th>
+                                            <th>Document Number</th>
+                                            <th>Last Generated</th>
+                                            <th>Verified</th>
+                                            <th class="text-end">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach ($documentsChecklist as $documentChecklist)
+                                            @php
+                                                $document = $documentChecklist['document'];
+                                                $status = $document?->status ?? 'draft';
+                                                $canPreview = ! empty($document?->snapshot_payload);
+                                            @endphp
+                                            <tr>
+                                                <td>
+                                                    <div class="font-semibold">{{ $documentChecklist['label'] }}</div>
+                                                    <small class="text-muted">Mandatory</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge {{ $documentStatusBadgeMap[$status] ?? 'bg-secondary' }}">
+                                                        {{ $documentStatusLabelMap[$status] ?? ucfirst(str_replace('_', ' ', $status)) }}
+                                                    </span>
+                                                </td>
+                                                <td>{{ $document?->document_number ?: '-' }}</td>
+                                                <td>
+                                                    @if ($document?->generated_at)
+                                                        <div>{{ $document->generated_at->format('d M Y H:i') }}</div>
+                                                        <small class="text-muted">{{ $document->generator?->name ?: '-' }}</small>
+                                                    @else
+                                                        -
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    @if ($document?->verified_at)
+                                                        <div>{{ $document->verified_at->format('d M Y H:i') }}</div>
+                                                        <small class="text-muted">{{ $document->verifier?->name ?: '-' }}</small>
+                                                    @else
+                                                        -
+                                                    @endif
+                                                </td>
+                                                <td class="text-end">
+                                                    <div class="d-inline-flex flex-wrap justify-content-end gap-2">
+                                                        @if ($document)
+                                                            <form action="{{ route('orders.documents.generate', [$order, $document]) }}" method="POST">
+                                                                @csrf
+                                                                @method('PATCH')
+                                                                <button type="submit" class="btn btn-sm btn-primary">
+                                                                    {{ $canPreview ? 'Regenerate' : 'Generate' }}
+                                                                </button>
+                                                            </form>
+                                                            @if ($canPreview)
+                                                                <a href="{{ route('orders.documents.preview', [$order, $document]) }}" class="btn btn-sm btn-light-primary">
+                                                                    Preview
+                                                                </a>
+                                                            @endif
+                                                        @else
+                                                            <span class="text-muted small">Record unavailable</span>
+                                                        @endif
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -197,6 +281,13 @@
                             <div class="list-group-item">
                                 <small class="text-muted d-block">Confirmed At</small>
                                 <span class="font-semibold">{{ optional($order->confirmed_at)->format('d M Y H:i') ?: '-' }}</span>
+                            </div>
+                            <div class="list-group-item">
+                                <small class="text-muted d-block">Mandatory Documents</small>
+                                <span class="font-semibold">
+                                    {{ $documentsChecklist->filter(fn (array $item) => ($item['document']?->status ?? null) === 'generated' || ($item['document']?->status ?? null) === 'verified')->count() }}/{{ $documentsChecklist->count() }} generated
+                                </span>
+                                <div class="text-muted small mt-1">Commercial invoice dan packing list sekarang bisa di-generate langsung dari order.</div>
                             </div>
                         </div>
 

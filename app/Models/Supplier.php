@@ -29,8 +29,16 @@ class Supplier extends Model
         'payment_term',
         'legal_status',
         'status',
+        'approval_status',
         'notes',
         'created_by',
+        'submitted_by',
+        'submitted_at',
+        'approved_by',
+        'approved_at',
+        'rejected_by',
+        'rejected_at',
+        'rejection_reason',
     ];
 
     protected function casts(): array
@@ -38,12 +46,30 @@ class Supplier extends Model
         return [
             'monthly_capacity_kg' => 'decimal:2',
             'minimum_order_kg' => 'decimal:2',
+            'submitted_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
         ];
     }
 
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function submitter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function rejector(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'rejected_by');
     }
 
     public function orderItems(): HasMany
@@ -54,6 +80,13 @@ class Supplier extends Model
     public function products(): HasMany
     {
         return $this->hasMany(SupplierProduct::class)
+            ->orderBy('sort_order')
+            ->orderBy('id');
+    }
+
+    public function photos(): HasMany
+    {
+        return $this->hasMany(SupplierPhoto::class)
             ->orderBy('sort_order')
             ->orderBy('id');
     }

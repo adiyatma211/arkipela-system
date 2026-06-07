@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\SupplierPhotoType;
 use App\Enums\SupplierStatus;
 use App\Enums\SupplierType;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -45,6 +46,15 @@ class SupplierRequest extends FormRequest
             'legal_status' => ['nullable', 'string', 'max:255'],
             'status' => ['required', Rule::in(SupplierStatus::values())],
             'notes' => ['nullable', 'string'],
+            'photos' => ['nullable', 'array', 'max:10'],
+            'photos.*.file' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'photos.*.photo_type' => ['required', Rule::in(SupplierPhotoType::values())],
+            'photos.*.caption' => ['nullable', 'string', 'max:255'],
+            'existing_photos_to_delete' => ['nullable', 'array'],
+            'existing_photos_to_delete.*' => [
+                'integer',
+                Rule::exists('supplier_photos', 'id')->where(fn ($query) => $query->where('supplier_id', $supplierId)),
+            ],
         ];
     }
 
@@ -74,6 +84,18 @@ class SupplierRequest extends FormRequest
                 ->all(),
             'payment_term' => $this->string('payment_term')->trim()->toString(),
             'legal_status' => $this->string('legal_status')->trim()->toString(),
+            'photos' => collect($this->input('photos', []))
+                ->map(function ($photo) {
+                    return [
+                        'photo_type' => trim((string) data_get($photo, 'photo_type')),
+                        'caption' => trim((string) data_get($photo, 'caption')),
+                    ];
+                })
+                ->all(),
+            'existing_photos_to_delete' => collect($this->input('existing_photos_to_delete', []))
+                ->filter(fn ($photoId) => filled($photoId))
+                ->values()
+                ->all(),
         ]);
     }
 }

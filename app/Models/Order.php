@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\OrderDocumentType;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 
 class Order extends Model
 {
@@ -81,5 +83,28 @@ class Order extends Model
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class)
+            ->orderBy('document_type')
+            ->orderBy('id');
+    }
+
+    public function mandatoryDocumentsChecklist(): Collection
+    {
+        $documents = $this->relationLoaded('documents')
+            ? $this->documents
+            : $this->documents()->get();
+
+        return collect(OrderDocumentType::mandatory())
+            ->map(function (OrderDocumentType $type) use ($documents) {
+                return [
+                    'type' => $type->value,
+                    'label' => $type->label(),
+                    'document' => $documents->firstWhere('document_type', $type->value),
+                ];
+            });
     }
 }

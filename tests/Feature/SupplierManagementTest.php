@@ -2,20 +2,29 @@
 
 namespace Tests\Feature;
 
+use App\Enums\SupplierApprovalStatus;
 use App\Enums\SupplierStatus;
 use App\Enums\SupplierType;
+use App\Enums\UserPermission;
+use App\Enums\UserRole;
+use App\Models\Permission;
+use App\Models\Role;
 use App\Models\Supplier;
+use App\Models\SupplierPhoto;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class SupplierManagementTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_it_stores_multiple_products_for_a_supplier(): void
+    public function test_procurement_supplier_creation_is_saved_as_pending_owner_approval(): void
     {
-        $user = User::factory()->create();
+        $user = $this->createProcurementUser();
+        Storage::fake('supplier-photos');
 
         $response = $this
             ->actingAs($user)
@@ -45,6 +54,18 @@ class SupplierManagementTest extends TestCase
                         'minimum_order_kg' => 150,
                     ],
                 ],
+                'photos' => [
+                    [
+                        'file' => UploadedFile::fake()->image('location.jpg', 800, 600)->size(1024),
+                        'photo_type' => 'location',
+                        'caption' => 'Front office',
+                    ],
+                    [
+                        'file' => UploadedFile::fake()->image('product.jpg', 800, 600)->size(1024),
+                        'photo_type' => 'product',
+                        'caption' => 'Clove sample',
+                    ],
+                ],
             ]);
 
         $supplier = Supplier::query()->firstOrFail();
@@ -57,6 +78,9 @@ class SupplierManagementTest extends TestCase
             'products_summary' => 'Clove, Nutmeg',
             'monthly_capacity_kg' => 2100,
             'minimum_order_kg' => 150,
+            'status' => SupplierStatus::PROSPECT->value,
+            'approval_status' => SupplierApprovalStatus::PENDING->value,
+            'submitted_by' => $user->id,
         ]);
 
         $this->assertDatabaseHas('supplier_products', [
@@ -74,18 +98,70 @@ class SupplierManagementTest extends TestCase
             'minimum_order_kg' => 150,
             'sort_order' => 1,
         ]);
+
+        $photo = SupplierPhoto::query()
+            ->where('supplier_id', $supplier->id)
+            ->where('photo_type', 'location')
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('supplier_photos', [
+            'supplier_id' => $supplier->id,
+            'photo_type' => 'product',
+            'caption' => 'Clove sample',
+        ]);
+
+        Storage::disk('supplier-photos')->assertExists($photo->file_path);
     }
 
-    public function test_it_replaces_supplier_products_on_update(): void
+    public function test_owner_can_approve_pending_supplier(): void
     {
-        $user = User::factory()->create();
+        $owner = $this->createOwnerUser();
+        $procurement = $this->createProcurementUser();
+
+        $supplier = Supplier::query()->create([
+            'supplier_code' => 'SUP-9999',
+            'supplier_name' => 'Supplier Pending',
+            'supplier_type' => SupplierType::COLLECTOR->value,
+            'status' => SupplierStatus::PROSPECT->value,
+            'approval_status' => SupplierApprovalStatus::PENDING->value,
+            'created_by' => $procurement->id,
+            'submitted_by' => $procurement->id,
+            'submitted_at' => now(),
+            'products_summary' => 'Old Product',
+            'monthly_capacity_kg' => 500,
+            'minimum_order_kg' => 100,
+        ]);
+
+        $response = $this
+            ->actingAs($owner)
+            ->patch(route('suppliers.approve', $supplier));
+
+        $response->assertRedirect(route('suppliers.show', $supplier));
+
+        $this->assertDatabaseHas('suppliers', [
+            'id' => $supplier->id,
+            'approval_status' => SupplierApprovalStatus::APPROVED->value,
+            'approved_by' => $owner->id,
+        ]);
+    }
+
+    public function test_non_owner_update_of_approved_supplier_resubmits_for_owner_approval(): void
+    {
+        $user = $this->createProcurementUser();
+        $owner = $this->createOwnerUser();
+        Storage::fake('supplier-photos');
 
         $supplier = Supplier::query()->create([
             'supplier_code' => 'SUP-9999',
             'supplier_name' => 'Supplier Lama',
             'supplier_type' => SupplierType::COLLECTOR->value,
-            'status' => SupplierStatus::PROSPECT->value,
+            'status' => SupplierStatus::APPROVED->value,
+            'approval_status' => SupplierApprovalStatus::APPROVED->value,
             'created_by' => $user->id,
+            'submitted_by' => $user->id,
+            'submitted_at' => now()->subDay(),
+            'approved_by' => $owner->id,
+            'approved_at' => now()->subDay(),
             'products_summary' => 'Old Product',
             'monthly_capacity_kg' => 500,
             'minimum_order_kg' => 100,
@@ -100,6 +176,18 @@ class SupplierManagementTest extends TestCase
             ],
         ]);
 
+        $oldPhotoPath = UploadedFile::fake()
+            ->image('old-warehouse.jpg', 800, 600)
+            ->store("suppliers/{$supplier->id}/photos", 'supplier-photos');
+
+        $existingPhoto = $supplier->photos()->create([
+            'photo_type' => 'warehouse',
+            'file_path' => $oldPhotoPath,
+            'caption' => 'Old warehouse',
+            'sort_order' => 0,
+            'uploaded_by' => $user->id,
+        ]);
+
         $response = $this
             ->actingAs($user)
             ->put(route('suppliers.update', $supplier), [
@@ -112,7 +200,7 @@ class SupplierManagementTest extends TestCase
                 'city' => 'Bandung',
                 'province' => 'West Java',
                 'country' => 'Indonesia',
-                'status' => SupplierStatus::APPROVED->value,
+                'status' => SupplierStatus::ACTIVE->value,
                 'payment_term' => 'T/T 30%',
                 'legal_status' => 'Updated',
                 'notes' => 'Updated',
@@ -128,6 +216,14 @@ class SupplierManagementTest extends TestCase
                         'minimum_order_kg' => 80,
                     ],
                 ],
+                'existing_photos_to_delete' => [$existingPhoto->id],
+                'photos' => [
+                    [
+                        'file' => UploadedFile::fake()->image('legal.jpg', 800, 600)->size(1024),
+                        'photo_type' => 'legal_document',
+                        'caption' => 'Updated legal document',
+                    ],
+                ],
             ]);
 
         $response->assertRedirect(route('suppliers.show', $supplier));
@@ -138,6 +234,9 @@ class SupplierManagementTest extends TestCase
             'products_summary' => 'Cinnamon, Mace',
             'monthly_capacity_kg' => 1000,
             'minimum_order_kg' => 80,
+            'status' => SupplierStatus::APPROVED->value,
+            'approval_status' => SupplierApprovalStatus::PENDING->value,
+            'submitted_by' => $user->id,
         ]);
 
         $this->assertDatabaseMissing('supplier_products', [
@@ -153,6 +252,60 @@ class SupplierManagementTest extends TestCase
         $this->assertDatabaseHas('supplier_products', [
             'supplier_id' => $supplier->id,
             'product_name' => 'Mace',
+        ]);
+
+        $this->assertDatabaseMissing('supplier_photos', [
+            'id' => $existingPhoto->id,
+        ]);
+
+        $this->assertDatabaseHas('supplier_photos', [
+            'supplier_id' => $supplier->id,
+            'photo_type' => 'legal_document',
+            'caption' => 'Updated legal document',
+        ]);
+
+        Storage::disk('supplier-photos')->assertMissing($oldPhotoPath);
+        Storage::disk('supplier-photos')->assertExists(
+            SupplierPhoto::query()
+                ->where('supplier_id', $supplier->id)
+                ->where('photo_type', 'legal_document')
+                ->firstOrFail()
+                ->file_path
+        );
+    }
+
+    private function createOwnerUser(): User
+    {
+        $role = Role::query()->firstOrCreate(
+            ['slug' => UserRole::OWNER->value],
+            ['name' => 'Owner', 'description' => 'Owner role']
+        );
+
+        return User::factory()->create([
+            'role_id' => $role->id,
+        ]);
+    }
+
+    private function createProcurementUser(): User
+    {
+        $role = Role::query()->firstOrCreate(
+            ['slug' => UserRole::PROCUREMENT->value],
+            ['name' => 'Procurement', 'description' => 'Procurement role']
+        );
+
+        $permission = Permission::query()->firstOrCreate(
+            ['slug' => UserPermission::SUPPLIERS_MANAGE->value],
+            [
+                'name' => UserPermission::SUPPLIERS_MANAGE->label(),
+                'module' => UserPermission::SUPPLIERS_MANAGE->module(),
+                'description' => UserPermission::SUPPLIERS_MANAGE->description(),
+            ]
+        );
+
+        $role->permissions()->syncWithoutDetaching([$permission->id]);
+
+        return User::factory()->create([
+            'role_id' => $role->id,
         ]);
     }
 }

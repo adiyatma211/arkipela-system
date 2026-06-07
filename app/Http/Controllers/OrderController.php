@@ -2,14 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\OrderDocumentStatus;
+use App\Enums\OrderDocumentType;
 use App\Enums\OrderStatus;
+use App\Enums\SupplierApprovalStatus;
 use App\Enums\SupplierStatus;
 use App\Http\Requests\OrderRequest;
 use App\Models\Client;
+use App\Models\Document;
 use App\Models\Order;
 use App\Models\Supplier;
 use App\Services\ActivityLogService;
 use App\Services\CodeGeneratorService;
+use App\Services\OrderDocumentService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
@@ -18,6 +23,7 @@ class OrderController extends Controller
 {
     public function __construct(
         private readonly CodeGeneratorService $codeGeneratorService,
+        private readonly OrderDocumentService $orderDocumentService,
         private readonly ActivityLogService $activityLogService,
     ) {
     }
@@ -117,12 +123,13 @@ class OrderController extends Controller
 
         $order = Order::query()->create($payload);
         $order->items()->createMany($itemsPayload);
+        $this->ensureMandatoryDocuments($order);
 
         $this->activityLogService->log(
             moduleName: 'orders',
             record: $order,
             action: 'created',
-            newValue: $order->load(['client', 'items'])->toArray(),
+            newValue: $order->load(['client', 'items', 'documents'])->toArray(),
             description: "Order {$order->order_code} created",
         );
 
@@ -138,10 +145,12 @@ class OrderController extends Controller
     {
         return view('orders.show', [
             'pageTitle' => 'Order Detail',
-            'pageSubtitle' => 'Pantau header order, item sourcing, dan margin transaksi.',
-            'order' => $order->load(['client', 'creator', 'items.supplier']),
+            'pageSubtitle' => 'Pantau header order, item sourcing, margin transaksi, dan kesiapan dokumen mandatory.',
+            'order' => $order->load(['client', 'creator', 'items.supplier', 'documents.generator', 'documents.verifier']),
             'statusBadgeMap' => $this->statusBadgeMap(),
             'statusLabelMap' => $this->statusLabelMap(),
+            'documentStatusBadgeMap' => $this->documentStatusBadgeMap(),
+            'documentStatusLabelMap' => $this->documentStatusLabelMap(),
         ]);
     }
 
@@ -204,13 +213,14 @@ class OrderController extends Controller
         $order->update($payload);
         $order->items()->delete();
         $order->items()->createMany($itemsPayload);
+        $this->ensureMandatoryDocuments($order);
 
         $this->activityLogService->log(
             moduleName: 'orders',
             record: $order,
             action: 'updated',
             oldValue: $oldValue,
-            newValue: $order->fresh()->load(['client', 'items'])->toArray(),
+            newValue: $order->fresh()->load(['client', 'items', 'documents'])->toArray(),
             description: "Order {$order->order_code} updated",
         );
 
@@ -241,16 +251,71 @@ class OrderController extends Controller
             ->with('status', "Order {$orderCode} deleted successfully.");
     }
 
+    public function generateDocument(Request $request, Order $order, Document $document): RedirectResponse
+    {
+        $this->ensureDocumentBelongsToOrder($order, $document);
+
+        $oldValue = $document->toArray();
+        $generatedDocument = $this->orderDocumentService->generate($document, $order, (int) $request->user()->id);
+
+        $this->activityLogService->log(
+            moduleName: 'orders',
+            record: $generatedDocument,
+            action: $oldValue['generated_at'] ? 'regenerated' : 'generated',
+            oldValue: $oldValue,
+            newValue: $generatedDocument->toArray(),
+            description: "{$generatedDocument->document_number} generated for order {$order->order_code}",
+        );
+
+        return redirect()
+            ->route('orders.show', $order)
+            ->with('status', "{$generatedDocument->document_number} generated successfully.");
+    }
+
+    public function previewDocument(Order $order, Document $document): View|RedirectResponse
+    {
+        $this->ensureDocumentBelongsToOrder($order, $document);
+
+        if (empty($document->snapshot_payload)) {
+            return redirect()
+                ->route('orders.show', $order)
+                ->with('error', 'Document has not been generated yet.');
+        }
+
+        $documentType = OrderDocumentType::from($document->document_type);
+
+        return view('orders.documents.preview', [
+            'pageTitle' => $documentType->label(),
+            'pageSubtitle' => "Generated preview untuk {$order->order_code}.",
+            'order' => $order->loadMissing(['client', 'items.supplier']),
+            'document' => $document->loadMissing(['generator', 'verifier']),
+            'documentType' => $documentType,
+            'documentPayload' => $document->snapshot_payload,
+        ]);
+    }
+
     private function availableSuppliers()
     {
         return Supplier::query()
             ->with('products')
-            ->whereIn('status', [
-                SupplierStatus::APPROVED->value,
-                SupplierStatus::ACTIVE->value,
-            ])
+            ->where('approval_status', SupplierApprovalStatus::APPROVED->value)
             ->orderBy('supplier_name')
-            ->get(['id', 'supplier_name', 'supplier_code', 'status', 'products_summary', 'monthly_capacity_kg', 'minimum_order_kg']);
+            ->get(['id', 'supplier_name', 'supplier_code', 'approval_status', 'status', 'products_summary', 'monthly_capacity_kg', 'minimum_order_kg']);
+    }
+
+    private function ensureMandatoryDocuments(Order $order): void
+    {
+        foreach (OrderDocumentType::mandatory() as $type) {
+            $order->documents()->firstOrCreate(
+                ['document_type' => $type->value],
+                ['status' => OrderDocumentStatus::DRAFT->value],
+            );
+        }
+    }
+
+    private function ensureDocumentBelongsToOrder(Order $order, Document $document): void
+    {
+        abort_unless($document->order_id === $order->id, 404);
     }
 
     private function emptyItem(): array
@@ -338,6 +403,23 @@ class OrderController extends Controller
     private function statusLabelMap(): array
     {
         return collect(OrderStatus::options())
+            ->pluck('label', 'value')
+            ->all();
+    }
+
+    private function documentStatusBadgeMap(): array
+    {
+        return [
+            OrderDocumentStatus::DRAFT->value => 'bg-light-secondary',
+            OrderDocumentStatus::GENERATED->value => 'bg-light-primary',
+            OrderDocumentStatus::OUTDATED->value => 'bg-light-warning text-dark',
+            OrderDocumentStatus::VERIFIED->value => 'bg-light-success',
+        ];
+    }
+
+    private function documentStatusLabelMap(): array
+    {
+        return collect(OrderDocumentStatus::options())
             ->pluck('label', 'value')
             ->all();
     }

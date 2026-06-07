@@ -11,6 +11,19 @@
             ];
         })
         ->all();
+    $supplierOptionsData = collect($suppliers)
+        ->map(function ($supplier) {
+            $approvalLabel = str($supplier->approval_status ?? 'approved')->replace('_', ' ')->title()->toString();
+            $statusLabel = str($supplier->status ?? 'active')->replace('_', ' ')->title()->toString();
+
+            return [
+                'id' => $supplier->id,
+                'label' => "{$supplier->supplier_name} ({$supplier->supplier_code})",
+                'meta' => "{$approvalLabel} Approval | {$statusLabel}",
+            ];
+        })
+        ->values()
+        ->all();
     if (empty($items)) {
         $items = [[
             'supplier_id' => null,
@@ -125,7 +138,7 @@
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <div>
                 <h5 class="mb-1">Order Items</h5>
-                <small class="text-muted">Supplier hanya menampilkan yang statusnya Approved atau Active, dan product mengikuti supplier yang dipilih.</small>
+                <small class="text-muted">Supplier hanya menampilkan yang sudah owner-approved. Status operasional tetap ditampilkan sebagai konteks, dan product mengikuti supplier yang dipilih.</small>
             </div>
             <button type="button" class="btn btn-light-primary" id="add-item-row">Add Item Row</button>
         </div>
@@ -160,9 +173,9 @@
                             <td>
                                 <select name="items[{{ $index }}][supplier_id]" class="form-select js-supplier-select" required>
                                     <option value="">Select supplier</option>
-                                    @foreach ($suppliers as $supplierOption)
-                                        <option value="{{ $supplierOption->id }}" @selected((string) data_get($item, 'supplier_id') === (string) $supplierOption->id)>
-                                            {{ $supplierOption->supplier_name }} ({{ $supplierOption->supplier_code }})
+                                    @foreach ($supplierOptionsData as $supplierOption)
+                                        <option value="{{ $supplierOption['id'] }}" @selected((string) data_get($item, 'supplier_id') === (string) $supplierOption['id'])>
+                                            {{ $supplierOption['label'] }} - {{ $supplierOption['meta'] }}
                                         </option>
                                     @endforeach
                                 </select>
@@ -326,7 +339,7 @@
             const extraCostInputs = [...document.querySelectorAll('.js-extra-cost')];
             const supplierOptionsHtml = @json(
                 '<option value="">Select supplier</option>' .
-                collect($suppliers)->map(fn ($supplierOption) => '<option value="' . $supplierOption->id . '">' . e($supplierOption->supplier_name . ' (' . $supplierOption->supplier_code . ')') . '</option>')->implode('')
+                collect($supplierOptionsData)->map(fn ($supplierOption) => '<option value="' . $supplierOption['id'] . '">' . e($supplierOption['label'] . ' - ' . $supplierOption['meta']) . '</option>')->implode('')
             );
             const supplierProductsMap = @json($supplierProductMap);
             const numericFieldsSelector = '.js-numeric-input';

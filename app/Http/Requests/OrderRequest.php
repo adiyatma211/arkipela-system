@@ -3,7 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\OrderStatus;
-use App\Enums\SupplierStatus;
+use App\Enums\SupplierApprovalStatus;
 use App\Models\Supplier;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -50,10 +50,8 @@ class OrderRequest extends FormRequest
             'items' => ['required', 'array', 'min:1'],
             'items.*.supplier_id' => [
                 'required',
-                Rule::exists('suppliers', 'id')->where(fn ($query) => $query->whereIn('status', [
-                    SupplierStatus::APPROVED->value,
-                    SupplierStatus::ACTIVE->value,
-                ])),
+                Rule::exists('suppliers', 'id')->where(fn ($query) => $query
+                    ->where('approval_status', SupplierApprovalStatus::APPROVED->value)),
             ],
             'items.*.product_name' => ['required', 'string', 'max:255'],
             'items.*.specification' => ['nullable', 'string'],

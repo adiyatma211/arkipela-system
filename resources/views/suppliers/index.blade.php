@@ -49,9 +49,20 @@
                                         @endforeach
                                     </select>
                                 </div>
-                                <div class="col-12 col-lg-2 d-flex align-items-end gap-2">
-                                    <button type="submit" class="btn btn-primary w-100">Apply</button>
-                                    <a href="{{ route('suppliers.index') }}" class="btn btn-light w-100">Reset</a>
+                                <div class="col-12 col-lg-2">
+                                    <label class="form-label">Approval</label>
+                                    <select name="approval_status" class="form-select">
+                                        <option value="">All approvals</option>
+                                        @foreach ($approvalStatusOptions as $option)
+                                            <option value="{{ $option['value'] }}" @selected($filters['approval_status'] === $option['value'])>
+                                                {{ $option['label'] }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <div class="col-12 d-flex justify-content-end gap-2 mt-3">
+                                    <button type="submit" class="btn btn-primary px-4">Apply</button>
+                                    <a href="{{ route('suppliers.index') }}" class="btn btn-light px-4">Reset</a>
                                 </div>
                             </div>
                         </form>
@@ -66,6 +77,7 @@
                                         <th>Location</th>
                                         <th>Products</th>
                                         <th>Capacity</th>
+                                        <th>Approval</th>
                                         <th>Status</th>
                                         <th>PIC</th>
                                         <th class="text-center">Action</th>
@@ -95,6 +107,14 @@
                                             </td>
                                             <td>{{ $totalCapacity !== null ? number_format($totalCapacity, 0) . ' kg' : '-' }}</td>
                                             <td>
+                                                <span class="badge {{ $approvalBadgeMap[$supplier->approval_status] ?? 'bg-secondary' }}">
+                                                    {{ $approvalLabelMap[$supplier->approval_status] ?? ucfirst(str_replace('_', ' ', $supplier->approval_status)) }}
+                                                </span>
+                                                <div class="small text-muted mt-1">
+                                                    {{ $supplier->approver?->name ?: $supplier->submitter?->name ?: '-' }}
+                                                </div>
+                                            </td>
+                                            <td>
                                                 <span class="badge {{ $statusBadgeMap[$supplier->status] ?? 'bg-secondary' }}">
                                                     {{ $statusLabelMap[$supplier->status] ?? ucfirst(str_replace('_', ' ', $supplier->status)) }}
                                                 </span>
@@ -117,7 +137,7 @@
                                         </tr>
                                     @empty
                                         <tr>
-                                            <td colspan="9" class="text-center text-muted py-5">
+                                            <td colspan="10" class="text-center text-muted py-5">
                                                 Belum ada supplier. Tambahkan supplier pertama untuk mulai membangun database sourcing Archipela.
                                             </td>
                                         </tr>
