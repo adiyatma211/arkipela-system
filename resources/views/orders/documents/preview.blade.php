@@ -187,6 +187,71 @@
             font-size: 0.9rem;
         }
 
+        .invoice-page-break {
+            break-before: page;
+            page-break-before: always;
+        }
+
+        .invoice-appendix-sheet {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            padding: 8mm;
+            background: #fff;
+            color: #111;
+            box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+        }
+
+        .invoice-appendix-title {
+            margin: 0 0 0.35rem;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .invoice-appendix-subtitle {
+            margin-bottom: 1rem;
+            color: #4b5563;
+            font-size: 11px;
+        }
+
+        .invoice-photo-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .invoice-photo-card {
+            border: 1px solid #222;
+            padding: 8px;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+
+        .invoice-photo-thumb {
+            width: 100%;
+            height: 220px;
+            object-fit: contain;
+            display: block;
+            background: #f8fafc;
+            border: 1px solid #d1d5db;
+            margin-bottom: 0.5rem;
+        }
+
+        .invoice-photo-title {
+            font-size: 11px;
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+        }
+
+        .invoice-photo-meta {
+            font-size: 10px;
+            line-height: 1.35;
+            color: #374151;
+            white-space: pre-line;
+        }
+
         @media (max-width: 992px) {
             .document-preview-paper {
                 padding: 1rem;
@@ -198,19 +263,50 @@
                 padding: 10px;
                 overflow-x: auto;
             }
+
+            .invoice-appendix-sheet {
+                width: 100%;
+                min-height: auto;
+                padding: 10px;
+            }
+
+            .invoice-photo-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media print {
+            html,
             body {
-                background: #fff;
+                background: #fff !important;
             }
 
+            body {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            #sidebar,
+            header,
+            .page-heading,
             .document-preview-actions,
-            .navbar,
-            .main-sidebar,
-            .footer,
-            .flash-message-container {
+            .flash-message-container,
+            footer {
                 display: none !important;
+            }
+
+            #main {
+                margin-left: 0 !important;
+                padding: 0 !important;
+                min-height: auto !important;
+            }
+
+            .page-content,
+            .document-preview-shell,
+            .document-preview-card,
+            .document-preview-paper {
+                margin: 0 !important;
+                padding: 0 !important;
             }
 
             .document-preview-card {
@@ -231,8 +327,20 @@
                 box-shadow: none;
             }
 
+            .invoice-appendix-sheet {
+                width: auto;
+                min-height: auto;
+                padding: 0;
+                box-shadow: none;
+            }
+
             .invoice-screen-note {
                 display: none;
+            }
+
+            .invoice-page-break {
+                break-before: page;
+                page-break-before: always;
             }
         }
     </style>

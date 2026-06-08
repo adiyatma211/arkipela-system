@@ -1,59 +1,242 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Archipela Web
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Internal export operating system for Archipela Spice, built with Laravel 12.
 
-## About Laravel
+This project is focused on internal operations, not external customer-facing documents only. It covers supplier, client, order, document, parameter, dashboard, and reporting workflows for the export team and owner.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Current Scope
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- Supplier management
+- Client management / sales pipeline base
+- Order management with item-level packaging detail
+- Commercial invoice preview
+- Packing list preview
+- Internal reports with date range and export
+- Owner dashboard
+- Master parameter management for reusable options
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Main Features
 
-## Learning Laravel
+### 1. Orders and Packaging
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Order items already support detailed internal fields such as:
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- item code
+- HS code
+- quantity in kg
+- quantity in pcs
+- quantity unit
+- pieces per package
+- package count
+- inner package
+- outer package
+- length / width / height
+- dimension unit
+- net weight
+- gross weight
+- packaging notes
 
-## Laravel Sponsors
+These fields are used for internal reporting and document generation.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### 2. Document Preview
 
-### Premium Partners
+Available document previews:
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+- Commercial Invoice
+- Packing List
 
-## Contributing
+Document templates are prepared for browser print / save as PDF workflow.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### 3. Parameter Master
 
-## Code of Conduct
+Reusable parameter master is stored in `arkipela_parameters` and currently used for:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- quantity units
+- dimension units
+- packaging types
+- outer packaging types
 
-## Security Vulnerabilities
+Parameter CRUD is available from the UI under:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- `Settings > Parameters`
 
-## License
+### 4. Reports
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Reports are internal-facing and currently available as submenu pages:
+
+- `Reports > Dashboard`
+- `Reports > Orders`
+- `Reports > Clients`
+- `Reports > Products`
+
+Each report supports:
+
+- date range filter
+- export HTML
+- export Excel (`.xls` HTML table format)
+
+### 5. Owner Dashboard
+
+Owner dashboard is already connected to live database data for:
+
+- active orders
+- revenue pipeline
+- confirmed revenue
+- gross profit
+- client pipeline summary
+- active order table
+- supplier performance
+- risk alerts
+
+Important note:
+
+- Some dashboard cards such as QC / payment related cards currently use proxy logic based on available supplier, order, and document statuses because dedicated QC and payment modules do not exist yet.
+
+## Tech Stack
+
+- PHP `^8.2`
+- Laravel `^12.0`
+- Blade
+- Bootstrap-based admin template
+- MySQL or compatible relational database
+
+## Local Setup
+
+### 1. Install dependencies
+
+```bash
+composer install
+npm install
+```
+
+### 2. Prepare environment
+
+```bash
+copy .env.example .env
+php artisan key:generate
+```
+
+Update your database credentials in `.env`.
+
+### 3. Run migration and seeders
+
+```bash
+php artisan migrate
+php artisan db:seed
+```
+
+### 4. Run application
+
+```bash
+php artisan serve
+npm run dev
+```
+
+## Important Seeders
+
+The database seeding currently includes:
+
+- `RoleSeeder`
+- `PermissionSeeder`
+- `RolePermissionSeeder`
+- `UserSeeder`
+- `ArkipelaParameterSeeder`
+- `SupplierSeeder`
+- `ClientSeeder`
+- `OrderSeeder`
+
+Useful manual commands:
+
+```bash
+php artisan db:seed --class=ArkipelaParameterSeeder
+php artisan db:seed --class=OrderSeeder
+php artisan db:seed --class=PermissionSeeder
+php artisan db:seed --class=RolePermissionSeeder
+```
+
+## Demo Accounts
+
+Seeded users include:
+
+- `owner@archipela.test`
+- `admin.export@archipela.test`
+- `procurement@archipela.test`
+- `sales@archipela.test`
+- `qc.admin@archipela.test`
+- `finance@archipela.test`
+
+Default password:
+
+```text
+password
+```
+
+## Important Routes
+
+### Core
+
+- `/dashboard`
+- `/suppliers`
+- `/clients`
+- `/orders`
+
+### Reports
+
+- `/reports/dashboard`
+- `/reports/orders`
+- `/reports/clients`
+- `/reports/products`
+
+### Settings
+
+- `/settings/users`
+- `/settings/roles`
+- `/settings/parameters`
+
+## Recent Implementation Notes
+
+Recent work already added:
+
+- desktop sidebar toggle
+- responsive order item form behavior
+- settings submenu structure
+- reports submenu structure
+- internal order report with detailed owner-facing columns
+- report exports to HTML and Excel
+- richer order seeder data
+- commercial invoice and packing list preview improvements
+- order item packaging parameterization
+
+## Known Limitations
+
+- PDF output is currently browser print/save based, not server-generated PDF
+- Report Excel export still uses HTML table export, not native `.xlsx`
+- Dashboard QC and payment cards still rely on status-based proxy logic
+- Order report summary is already detailed, but item-per-row report is not separated yet
+
+## Recommended Next Steps
+
+- Add dedicated QC module and tables
+- Add dedicated payment / collection module
+- Add true Excel export with `.xlsx`
+- Add `Order Item Detail Report` for per-item operational analysis
+- Add report filters for status, client, supplier, and product
+- Add server-side PDF generation if needed
+
+## Testing
+
+Basic test command:
+
+```bash
+php artisan test
+```
+
+Quick check used during recent updates:
+
+```bash
+php artisan test --filter=ExampleTest
+```
+
+## Notes for GitHub
+
+This repository is currently closer to an internal MVP / evolving operations system than a finished product. Some parts are already production-shaped, while some others still use temporary internal logic until their dedicated modules are built.

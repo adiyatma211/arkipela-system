@@ -4,6 +4,23 @@
     $orderData = data_get($documentPayload, 'order', []);
     $items = collect(data_get($documentPayload, 'items', []));
     $totals = data_get($documentPayload, 'totals', []);
+    $photoAttachments = collect(data_get($documentPayload, 'photo_attachments', []))
+        ->flatMap(function ($attachment) {
+            return collect(data_get($attachment, 'photos', []))->map(function ($photo, $index) use ($attachment) {
+                return [
+                    'line_number' => data_get($attachment, 'line_number'),
+                    'item_code' => data_get($attachment, 'item_code'),
+                    'product_name' => data_get($attachment, 'product_name'),
+                    'supplier_name' => data_get($attachment, 'supplier_name'),
+                    'caption' => data_get($photo, 'caption'),
+                    'url' => data_get($photo, 'url'),
+                    'photo_type' => data_get($photo, 'photo_type'),
+                    'photo_index' => $index + 1,
+                ];
+            });
+        })
+        ->filter(fn ($photo) => filled(data_get($photo, 'url')))
+        ->values();
     $currency = data_get($orderData, 'currency', 'USD');
     $generatedAt = data_get($documentPayload, 'generated_at');
     $companyLogo = public_path('assetes/logo/logo.png');
@@ -51,6 +68,8 @@
     $grandTotal = $formatNumber(data_get($totals, 'subtotal_sales', 0), 2);
     $totalQuantityPcs = (int) data_get($totals, 'total_quantity_pcs', 0);
     $totalPackageCount = (int) data_get($totals, 'total_package_count', 0);
+    $appendixPages = $photoAttachments->chunk(4)->values();
+    $totalPages = 1 + $appendixPages->count();
 @endphp
 
 <div class="invoice-sheet">
@@ -75,7 +94,7 @@
             </td>
             <td colspan="2">
                 <span class="invoice-cell-label">Pages</span>
-                1 of 1
+                1 of {{ $totalPages }}
             </td>
         </tr>
         <tr>
@@ -327,3 +346,39 @@
         </tr>
     </table>
 </div>
+
+@foreach ($appendixPages as $appendixPageIndex => $appendixPhotos)
+    <div class="invoice-page-break"></div>
+    <div class="invoice-appendix-sheet">
+        <div class="invoice-appendix-title">Attachment - Product Photos</div>
+        <div class="invoice-appendix-subtitle">
+            {{ data_get($documentPayload, 'document_number', '-') }} |
+            Page {{ $appendixPageIndex + 2 }} of {{ $totalPages }}
+        </div>
+
+        <div class="invoice-photo-grid">
+            @foreach ($appendixPhotos as $photo)
+                <div class="invoice-photo-card">
+                    <img src="{{ data_get($photo, 'url') }}" alt="{{ data_get($photo, 'product_name', 'Product Photo') }}"
+                        class="invoice-photo-thumb">
+                    <div class="invoice-photo-title">
+                        {{ data_get($photo, 'product_name', '-') }}
+                        @if (filled(data_get($photo, 'item_code')))
+                            ({{ data_get($photo, 'item_code') }})
+                        @endif
+                    </div>
+                    <div class="invoice-photo-meta">
+                        Supplier: {{ data_get($photo, 'supplier_name', '-') }}<br>
+                        Line: {{ data_get($photo, 'line_number', '-') }} |
+                        Photo {{ data_get($photo, 'photo_index', '-') }}<br>
+                        @if (filled(data_get($photo, 'caption')))
+                            Caption: {{ data_get($photo, 'caption') }}
+                        @else
+                            Product photo attachment
+                        @endif
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    </div>
+@endforeach
