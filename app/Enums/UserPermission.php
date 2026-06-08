@@ -11,6 +11,7 @@ enum UserPermission: string
     case CLIENTS_MANAGE = 'clients.manage';
     case ORDERS_VIEW = 'orders.view';
     case ORDERS_MANAGE = 'orders.manage';
+    case REPORTS_VIEW = 'reports.view';
     case USERS_VIEW = 'users.view';
     case USERS_MANAGE = 'users.manage';
     case SETTINGS_MANAGE = 'settings.manage';
@@ -25,6 +26,7 @@ enum UserPermission: string
             self::CLIENTS_MANAGE => 'Manage Clients',
             self::ORDERS_VIEW => 'View Orders',
             self::ORDERS_MANAGE => 'Manage Orders',
+            self::REPORTS_VIEW => 'View Reports',
             self::USERS_VIEW => 'View Users',
             self::USERS_MANAGE => 'Manage Users',
             self::SETTINGS_MANAGE => 'Manage Settings',
@@ -41,6 +43,7 @@ enum UserPermission: string
             self::CLIENTS_MANAGE => 'Create, update, and delete clients.',
             self::ORDERS_VIEW => 'Open order listing and detail pages.',
             self::ORDERS_MANAGE => 'Create, update, and delete orders.',
+            self::REPORTS_VIEW => 'Access operational and profitability report pages.',
             self::USERS_VIEW => 'Open user listing and profile settings pages.',
             self::USERS_MANAGE => 'Create users and update role, status, or password.',
             self::SETTINGS_MANAGE => 'Manage role and permission assignments.',

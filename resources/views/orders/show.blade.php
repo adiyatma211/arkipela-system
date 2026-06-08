@@ -96,11 +96,11 @@
                                 <thead>
                                     <tr>
                                         <th>Supplier</th>
-                                        <th>Product</th>
-                                        <th>Specification</th>
-                                        <th>Qty (kg)</th>
+                                        <th>Product Detail</th>
+                                        <th>Qty &amp; Packaging</th>
+                                        <th>Weight &amp; Size</th>
                                         <th>Selling Price</th>
-                                        <th>Product Cost / kg</th>
+                                        <th>Product Cost</th>
                                         <th>Unit Margin</th>
                                         <th>Gross Line Profit</th>
                                     </tr>
@@ -109,9 +109,41 @@
                                     @foreach ($order->items as $item)
                                         <tr>
                                             <td>{{ $item->supplier?->supplier_name ?: '-' }}</td>
-                                            <td>{{ $item->product_name }}</td>
-                                            <td>{{ $item->specification ?: '-' }}</td>
-                                            <td>{{ number_format((float) $item->quantity_kg, 2) }}</td>
+                                            <td>
+                                                <div class="fw-semibold">{{ $item->product_name }}</div>
+                                                <div class="small text-muted">Code: {{ $item->item_code ?: '-' }}</div>
+                                                <div class="small text-muted">HS Code: {{ $item->hs_code ?: '-' }}</div>
+                                                <div class="small mt-1">{{ $item->specification ?: '-' }}</div>
+                                            </td>
+                                            <td>
+                                                <div>{{ number_format((float) $item->quantity_kg, 2) }} kg</div>
+                                                <div>{{ $item->quantity_pcs ? number_format((int) $item->quantity_pcs) . ' ' . ($item->quantity_unit ?: 'PCS') : '-' }}</div>
+                                                <div class="small text-muted mt-1">
+                                                    {{ $item->pieces_per_package ? number_format((int) $item->pieces_per_package) . ' / pack' : '-' }}
+                                                    | {{ $item->package_count ? number_format((int) $item->package_count) . ' pack' : '-' }}
+                                                </div>
+                                                <div class="small text-muted">
+                                                    {{ $item->package_type ?: '-' }}
+                                                    @if ($item->outer_package_type)
+                                                        / {{ $item->outer_package_type }}
+                                                    @endif
+                                                </div>
+                                                @if ($item->package_notes)
+                                                    <div class="small mt-1">{{ $item->package_notes }}</div>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                <div>N.W: {{ $item->net_weight_kg ? number_format((float) $item->net_weight_kg, 2) . ' kg' : '-' }}</div>
+                                                <div>G.W: {{ $item->gross_weight_kg ? number_format((float) $item->gross_weight_kg, 2) . ' kg' : '-' }}</div>
+                                                <div class="small text-muted mt-1">
+                                                    Size:
+                                                    {{ $item->length_cm ? number_format((float) $item->length_cm, 2) : '-' }}
+                                                    x
+                                                    {{ $item->width_cm ? number_format((float) $item->width_cm, 2) : '-' }}
+                                                    x
+                                                    {{ $item->height_cm ? number_format((float) $item->height_cm, 2) : '-' }} cm
+                                                </div>
+                                            </td>
                                             <td>{{ $order->currency }} {{ number_format((float) $item->selling_price, 2) }}</td>
                                             <td>{{ $order->currency }} {{ number_format((float) $item->buying_price, 2) }}</td>
                                             <td>{{ $order->currency }} {{ number_format((float) $item->selling_price - (float) $item->buying_price, 2) }}</td>

@@ -25,6 +25,7 @@ class RolePermissionSeeder extends Seeder
                 UserPermission::CLIENTS_VIEW,
                 UserPermission::ORDERS_VIEW,
                 UserPermission::ORDERS_MANAGE,
+                UserPermission::REPORTS_VIEW,
             ],
             UserRole::PROCUREMENT->value => [
                 UserPermission::SUPPLIERS_VIEW,
@@ -40,6 +41,7 @@ class RolePermissionSeeder extends Seeder
             ],
             UserRole::FINANCE->value => [
                 UserPermission::ORDERS_VIEW,
+                UserPermission::REPORTS_VIEW,
             ],
         ];
 

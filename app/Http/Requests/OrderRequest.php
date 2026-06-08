@@ -53,9 +53,24 @@ class OrderRequest extends FormRequest
                 Rule::exists('suppliers', 'id')->where(fn ($query) => $query
                     ->where('approval_status', SupplierApprovalStatus::APPROVED->value)),
             ],
+            'items.*.item_code' => ['nullable', 'string', 'max:255'],
             'items.*.product_name' => ['required', 'string', 'max:255'],
+            'items.*.hs_code' => ['nullable', 'string', 'max:255'],
             'items.*.specification' => ['nullable', 'string'],
             'items.*.quantity_kg' => ['required', 'numeric', 'min:0.01'],
+            'items.*.quantity_pcs' => ['nullable', 'integer', 'min:1'],
+            'items.*.quantity_unit' => ['nullable', 'string', 'max:20'],
+            'items.*.pieces_per_package' => ['nullable', 'integer', 'min:1'],
+            'items.*.package_count' => ['nullable', 'integer', 'min:1'],
+            'items.*.package_type' => ['nullable', 'string', 'max:255'],
+            'items.*.outer_package_type' => ['nullable', 'string', 'max:255'],
+            'items.*.length_cm' => ['nullable', 'numeric', 'min:0'],
+            'items.*.width_cm' => ['nullable', 'numeric', 'min:0'],
+            'items.*.height_cm' => ['nullable', 'numeric', 'min:0'],
+            'items.*.dimension_unit' => ['nullable', 'string', 'max:20'],
+            'items.*.net_weight_kg' => ['nullable', 'numeric', 'min:0'],
+            'items.*.gross_weight_kg' => ['nullable', 'numeric', 'min:0'],
+            'items.*.package_notes' => ['nullable', 'string'],
             'items.*.selling_price' => ['required', 'numeric', 'min:0'],
             'items.*.buying_price' => ['required', 'numeric', 'min:0'],
         ];
@@ -71,14 +86,36 @@ class OrderRequest extends FormRequest
 
                 return [
                     'supplier_id' => filled($row['supplier_id'] ?? null) ? $row['supplier_id'] : null,
+                    'item_code' => trim((string) ($row['item_code'] ?? '')),
                     'product_name' => trim((string) ($row['product_name'] ?? '')),
+                    'hs_code' => trim((string) ($row['hs_code'] ?? '')),
                     'specification' => trim((string) ($row['specification'] ?? '')),
                     'quantity_kg' => $row['quantity_kg'] ?? null,
+                    'quantity_pcs' => $row['quantity_pcs'] ?? null,
+                    'quantity_unit' => strtoupper(trim((string) ($row['quantity_unit'] ?? 'PCS'))),
+                    'pieces_per_package' => $row['pieces_per_package'] ?? null,
+                    'package_count' => $row['package_count'] ?? null,
+                    'package_type' => trim((string) ($row['package_type'] ?? '')),
+                    'outer_package_type' => trim((string) ($row['outer_package_type'] ?? '')),
+                    'length_cm' => $row['length_cm'] ?? null,
+                    'width_cm' => $row['width_cm'] ?? null,
+                    'height_cm' => $row['height_cm'] ?? null,
+                    'dimension_unit' => strtoupper(trim((string) ($row['dimension_unit'] ?? 'CM'))),
+                    'net_weight_kg' => $row['net_weight_kg'] ?? null,
+                    'gross_weight_kg' => $row['gross_weight_kg'] ?? null,
+                    'package_notes' => trim((string) ($row['package_notes'] ?? '')),
                     'selling_price' => $row['selling_price'] ?? null,
                     'buying_price' => $row['buying_price'] ?? null,
                 ];
             })
-            ->filter(fn (array $item) => $item['product_name'] !== '' || filled($item['supplier_id']) || filled($item['quantity_kg']) || filled($item['selling_price']) || filled($item['buying_price']))
+            ->filter(fn (array $item) => $item['product_name'] !== ''
+                || filled($item['supplier_id'])
+                || filled($item['item_code'])
+                || filled($item['hs_code'])
+                || filled($item['quantity_kg'])
+                || filled($item['quantity_pcs'])
+                || filled($item['selling_price'])
+                || filled($item['buying_price']))
             ->values()
             ->all();
 
@@ -133,6 +170,16 @@ class OrderRequest extends FormRequest
                     $validator->errors()->add(
                         "items.$index.product_name",
                         'Selected product is not available for the chosen supplier.'
+                    );
+                }
+
+                $netWeight = data_get($item, 'net_weight_kg');
+                $grossWeight = data_get($item, 'gross_weight_kg');
+
+                if (filled($netWeight) && filled($grossWeight) && (float) $grossWeight < (float) $netWeight) {
+                    $validator->errors()->add(
+                        "items.$index.gross_weight_kg",
+                        'Gross weight must be greater than or equal to net weight.'
                     );
                 }
             }

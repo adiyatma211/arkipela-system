@@ -13,6 +13,7 @@ use App\Models\Document;
 use App\Models\Order;
 use App\Models\Supplier;
 use App\Services\ActivityLogService;
+use App\Services\ArkipelaParameterService;
 use App\Services\CodeGeneratorService;
 use App\Services\OrderDocumentService;
 use Illuminate\Http\Request;
@@ -25,6 +26,7 @@ class OrderController extends Controller
         private readonly CodeGeneratorService $codeGeneratorService,
         private readonly OrderDocumentService $orderDocumentService,
         private readonly ActivityLogService $activityLogService,
+        private readonly ArkipelaParameterService $arkipelaParameterService,
     ) {
     }
 
@@ -90,6 +92,7 @@ class OrderController extends Controller
             'formMethod' => 'POST',
             'submitLabel' => 'Save Order',
             'itemsData' => [$this->emptyItem()],
+            'parameterOptions' => $this->parameterOptions(),
         ]);
     }
 
@@ -172,14 +175,30 @@ class OrderController extends Controller
             'itemsData' => $order->items
                 ->map(fn ($item) => [
                     'supplier_id' => $item->supplier_id,
+                    'item_code' => $item->item_code,
                     'product_name' => $item->product_name,
+                    'hs_code' => $item->hs_code,
                     'specification' => $item->specification,
                     'quantity_kg' => $item->quantity_kg,
+                    'quantity_pcs' => $item->quantity_pcs,
+                    'quantity_unit' => $item->quantity_unit,
+                    'pieces_per_package' => $item->pieces_per_package,
+                    'package_count' => $item->package_count,
+                    'package_type' => $item->package_type,
+                    'outer_package_type' => $item->outer_package_type,
+                    'length_cm' => $item->length_cm,
+                    'width_cm' => $item->width_cm,
+                    'height_cm' => $item->height_cm,
+                    'dimension_unit' => $item->dimension_unit,
+                    'net_weight_kg' => $item->net_weight_kg,
+                    'gross_weight_kg' => $item->gross_weight_kg,
+                    'package_notes' => $item->package_notes,
                     'selling_price' => $item->selling_price,
                     'buying_price' => $item->buying_price,
                 ])
                 ->values()
                 ->all() ?: [$this->emptyItem()],
+            'parameterOptions' => $this->parameterOptions(),
         ]);
     }
 
@@ -322,9 +341,24 @@ class OrderController extends Controller
     {
         return [
             'supplier_id' => null,
+            'item_code' => '',
             'product_name' => '',
+            'hs_code' => '',
             'specification' => '',
             'quantity_kg' => null,
+            'quantity_pcs' => null,
+            'quantity_unit' => 'PCS',
+            'pieces_per_package' => null,
+            'package_count' => null,
+            'package_type' => '',
+            'outer_package_type' => '',
+            'length_cm' => null,
+            'width_cm' => null,
+            'height_cm' => null,
+            'dimension_unit' => 'CM',
+            'net_weight_kg' => null,
+            'gross_weight_kg' => null,
+            'package_notes' => '',
             'selling_price' => null,
             'buying_price' => null,
         ];
@@ -342,9 +376,24 @@ class OrderController extends Controller
 
                 return [
                     'supplier_id' => $item['supplier_id'] ?: null,
+                    'item_code' => $this->normalizeNullableString($item['item_code'] ?? null),
                     'product_name' => $item['product_name'],
+                    'hs_code' => $this->normalizeNullableString($item['hs_code'] ?? null),
                     'specification' => $item['specification'] ?: null,
                     'quantity_kg' => round($quantity, 2),
+                    'quantity_pcs' => $this->normalizeNullableInteger($item['quantity_pcs'] ?? null),
+                    'quantity_unit' => $this->normalizeNullableString($item['quantity_unit'] ?? null) ?: 'PCS',
+                    'pieces_per_package' => $this->normalizeNullableInteger($item['pieces_per_package'] ?? null),
+                    'package_count' => $this->normalizeNullableInteger($item['package_count'] ?? null),
+                    'package_type' => $this->normalizeNullableString($item['package_type'] ?? null),
+                    'outer_package_type' => $this->normalizeNullableString($item['outer_package_type'] ?? null),
+                    'length_cm' => $this->normalizeNullableDecimal($item['length_cm'] ?? null),
+                    'width_cm' => $this->normalizeNullableDecimal($item['width_cm'] ?? null),
+                    'height_cm' => $this->normalizeNullableDecimal($item['height_cm'] ?? null),
+                    'dimension_unit' => $this->normalizeNullableString($item['dimension_unit'] ?? null) ?: 'CM',
+                    'net_weight_kg' => $this->normalizeNullableDecimal($item['net_weight_kg'] ?? null),
+                    'gross_weight_kg' => $this->normalizeNullableDecimal($item['gross_weight_kg'] ?? null),
+                    'package_notes' => $this->normalizeNullableString($item['package_notes'] ?? null),
                     'selling_price' => round($sellingPrice, 2),
                     'buying_price' => round($buyingPrice, 2),
                     'line_total_sales' => round($lineTotalSales, 2),
@@ -354,6 +403,31 @@ class OrderController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    private function normalizeNullableString(mixed $value): ?string
+    {
+        $normalized = trim((string) $value);
+
+        return $normalized !== '' ? $normalized : null;
+    }
+
+    private function normalizeNullableInteger(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int) $value;
+    }
+
+    private function normalizeNullableDecimal(mixed $value, int $precision = 2): ?float
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return round((float) $value, $precision);
     }
 
     private function calculateTotals(array $items, array $payload): array
@@ -383,6 +457,16 @@ class OrderController extends Controller
             'total_additional_cost' => round($totalAdditionalCost, 2),
             'net_profit' => round($netProfit, 2),
             'net_margin' => round($netMargin, 2),
+        ];
+    }
+
+    private function parameterOptions(): array
+    {
+        return [
+            'quantity_units' => $this->arkipelaParameterService->options(ArkipelaParameterService::GROUP_QUANTITY_UNIT),
+            'dimension_units' => $this->arkipelaParameterService->options(ArkipelaParameterService::GROUP_DIMENSION_UNIT),
+            'packaging_types' => $this->arkipelaParameterService->options(ArkipelaParameterService::GROUP_PACKAGING_TYPE),
+            'outer_packaging_types' => $this->arkipelaParameterService->options(ArkipelaParameterService::GROUP_OUTER_PACKAGING_TYPE),
         ];
     }
 

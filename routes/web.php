@@ -1,9 +1,11 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\ArkipelaParameterController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\UserManagementController;
@@ -28,6 +30,14 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('permission:' . UserPermission::DASHBOARD_VIEW->value)
         ->name('dashboard');
 
+    Route::prefix('reports')->name('reports.')->middleware('permission:' . UserPermission::REPORTS_VIEW->value)->group(function (): void {
+        Route::get('/', [ReportController::class, 'index'])->name('index');
+        Route::get('/dashboard', [ReportController::class, 'dashboard'])->name('dashboard');
+        Route::get('/orders', [ReportController::class, 'orders'])->name('orders');
+        Route::get('/clients', [ReportController::class, 'clients'])->name('clients');
+        Route::get('/products', [ReportController::class, 'products'])->name('products');
+    });
+
     Route::controller(RolePermissionController::class)->prefix('settings/roles')->name('settings.roles.')->group(function (): void {
         Route::get('/', 'index')
             ->middleware('permission:' . UserPermission::SETTINGS_MANAGE->value)
@@ -36,6 +46,24 @@ Route::middleware('auth')->group(function (): void {
             ->middleware('permission:' . UserPermission::SETTINGS_MANAGE->value)
             ->name('edit');
         Route::put('/{role}', 'update')
+            ->middleware('permission:' . UserPermission::SETTINGS_MANAGE->value)
+            ->name('update');
+    });
+
+    Route::controller(ArkipelaParameterController::class)->prefix('settings/parameters')->name('settings.parameters.')->group(function (): void {
+        Route::get('/', 'index')
+            ->middleware('permission:' . UserPermission::SETTINGS_MANAGE->value)
+            ->name('index');
+        Route::get('/create', 'create')
+            ->middleware('permission:' . UserPermission::SETTINGS_MANAGE->value)
+            ->name('create');
+        Route::post('/', 'store')
+            ->middleware('permission:' . UserPermission::SETTINGS_MANAGE->value)
+            ->name('store');
+        Route::get('/{parameter}/edit', 'edit')
+            ->middleware('permission:' . UserPermission::SETTINGS_MANAGE->value)
+            ->name('edit');
+        Route::put('/{parameter}', 'update')
             ->middleware('permission:' . UserPermission::SETTINGS_MANAGE->value)
             ->name('update');
     });

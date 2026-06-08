@@ -1,5 +1,22 @@
 @php
     $items = old('items', $itemsData ?? []);
+    $parameterOptions = $parameterOptions ?? [];
+    $quantityUnitOptions = collect(data_get($parameterOptions, 'quantity_units', []));
+    $dimensionUnitOptions = collect(data_get($parameterOptions, 'dimension_units', []));
+    $packagingTypeOptions = collect(data_get($parameterOptions, 'packaging_types', []));
+    $outerPackagingTypeOptions = collect(data_get($parameterOptions, 'outer_packaging_types', []));
+    if ($quantityUnitOptions->isEmpty()) {
+        $quantityUnitOptions = collect([['value' => 'PCS', 'label' => 'Pieces', 'description' => 'Fallback']]);
+    }
+    if ($dimensionUnitOptions->isEmpty()) {
+        $dimensionUnitOptions = collect([['value' => 'CM', 'label' => 'Centimeter', 'description' => 'Fallback']]);
+    }
+    if ($packagingTypeOptions->isEmpty()) {
+        $packagingTypeOptions = collect([['value' => 'BOX', 'label' => 'Box', 'description' => 'Fallback']]);
+    }
+    if ($outerPackagingTypeOptions->isEmpty()) {
+        $outerPackagingTypeOptions = collect([['value' => 'NONE', 'label' => 'None', 'description' => 'Fallback']]);
+    }
     $supplierProductMap = collect($suppliers)
         ->mapWithKeys(function ($supplier) {
             return [
@@ -27,14 +44,131 @@
     if (empty($items)) {
         $items = [[
             'supplier_id' => null,
+            'item_code' => '',
             'product_name' => '',
+            'hs_code' => '',
             'specification' => '',
             'quantity_kg' => null,
+            'quantity_pcs' => null,
+            'quantity_unit' => 'PCS',
+            'pieces_per_package' => null,
+            'package_count' => null,
+            'package_type' => '',
+            'outer_package_type' => '',
+            'length_cm' => null,
+            'width_cm' => null,
+            'height_cm' => null,
+            'net_weight_kg' => null,
+            'gross_weight_kg' => null,
+            'package_notes' => '',
             'selling_price' => null,
             'buying_price' => null,
         ]];
     }
+
+    $ensureOption = static function (\Illuminate\Support\Collection $options, ?string $value) {
+        $normalized = trim((string) $value);
+
+        if ($normalized === '' || $options->contains(fn (array $option) => $option['value'] === $normalized)) {
+            return $options;
+        }
+
+        return $options->push([
+            'value' => $normalized,
+            'label' => $normalized,
+            'description' => 'Existing value',
+        ]);
+    };
 @endphp
+
+<style>
+    .archipela-order-items-responsive {
+        transition: all 0.25s ease;
+    }
+
+    .archipela-order-items-responsive.order-items-compact {
+        overflow: visible;
+    }
+
+    .archipela-order-items-responsive.order-items-compact thead {
+        display: none;
+    }
+
+    .archipela-order-items-responsive.order-items-compact table,
+    .archipela-order-items-responsive.order-items-compact tbody {
+        display: block;
+        width: 100%;
+    }
+
+    .archipela-order-items-responsive.order-items-compact .order-item-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0;
+        margin-bottom: 1rem;
+        border: 1px solid #dce3f1;
+        border-radius: 1rem;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 16px 32px rgba(37, 57, 111, 0.06);
+    }
+
+    .archipela-order-items-responsive.order-items-compact .order-item-row td {
+        display: block;
+        width: auto;
+        padding: 1rem;
+        border: 0;
+        border-right: 1px solid #eef2fa;
+        border-bottom: 1px solid #eef2fa;
+        vertical-align: top;
+    }
+
+    .archipela-order-items-responsive.order-items-compact .order-item-row td:nth-child(2n) {
+        border-right: 0;
+    }
+
+    .archipela-order-items-responsive.order-items-compact .order-item-row td[data-cell-label]::before {
+        content: attr(data-cell-label);
+        display: block;
+        margin-bottom: 0.75rem;
+        font-size: 0.76rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #7c8db5;
+    }
+
+    .archipela-order-items-responsive.order-items-compact .order-item-row td[data-cell-label="Product Margin"],
+    .archipela-order-items-responsive.order-items-compact .order-item-row td[data-cell-label="Action"] {
+        grid-column: 1 / -1;
+        border-right: 0;
+    }
+
+    .archipela-order-items-responsive.order-items-compact .order-item-row td[data-cell-label="Action"] {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        background: #f8fbff;
+        border-bottom: 0;
+    }
+
+    .archipela-order-items-responsive.order-items-compact .order-item-row td[data-cell-label="Product Margin"] {
+        background: #fbfcff;
+    }
+
+    .archipela-order-items-responsive.order-items-compact .order-item-row:last-child {
+        margin-bottom: 0;
+    }
+
+    @media (max-width: 991.98px) {
+        .archipela-order-items-responsive.order-items-compact .order-item-row {
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        .archipela-order-items-responsive.order-items-compact .order-item-row td {
+            border-right: 0;
+        }
+    }
+</style>
 
 @csrf
 @if ($formMethod !== 'POST')
@@ -138,23 +272,22 @@
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
             <div>
                 <h5 class="mb-1">Order Items</h5>
-                <small class="text-muted">Supplier hanya menampilkan yang sudah owner-approved. Status operasional tetap ditampilkan sebagai konteks, dan product mengikuti supplier yang dipilih.</small>
+                <small class="text-muted">Lengkapi identitas barang, qty pcs, packaging, ukuran, dan berat supaya commercial invoice dan packing list bisa mengikuti kebutuhan forwarder.</small>
             </div>
             <button type="button" class="btn btn-light-primary" id="add-item-row">Add Item Row</button>
         </div>
 
         @error('items')<div class="text-danger small mb-2">{{ $message }}</div>@enderror
 
-        <div class="table-responsive">
+        <div class="table-responsive archipela-order-items-responsive" id="order-items-responsive">
             <table class="table table-bordered align-middle" id="order-items-table">
                 <thead>
                     <tr>
-                        <th style="min-width: 220px;">Supplier</th>
-                        <th style="min-width: 180px;">Product</th>
-                        <th style="min-width: 180px;">Specification</th>
-                        <th style="min-width: 130px;">Qty (kg)</th>
-                        <th style="min-width: 140px;">Selling Price</th>
-                        <th style="min-width: 160px;">Product Cost / kg</th>
+                        <th style="min-width: 280px;">Supplier &amp; Product</th>
+                        <th style="min-width: 250px;">Item Identity</th>
+                        <th style="min-width: 240px;">Qty &amp; Pricing</th>
+                        <th style="min-width: 300px;">Packaging Detail</th>
+                        <th style="min-width: 260px;">Weight &amp; Size</th>
                         <th style="min-width: 220px;">Product Margin</th>
                         <th style="width: 70px;" class="text-center">Act</th>
                     </tr>
@@ -165,12 +298,17 @@
                             $selectedSupplierId = (string) data_get($item, 'supplier_id');
                             $selectedProductName = data_get($item, 'product_name');
                             $productOptions = $supplierProductMap[$selectedSupplierId] ?? [];
+                            $itemQuantityUnitOptions = $ensureOption($quantityUnitOptions, data_get($item, 'quantity_unit', 'PCS'));
+                            $itemDimensionUnitOptions = $ensureOption($dimensionUnitOptions, data_get($item, 'dimension_unit', 'CM'));
+                            $itemPackagingTypeOptions = $ensureOption($packagingTypeOptions, data_get($item, 'package_type'));
+                            $itemOuterPackagingTypeOptions = $ensureOption($outerPackagingTypeOptions, data_get($item, 'outer_package_type'));
                             if ($selectedProductName && ! in_array($selectedProductName, $productOptions, true)) {
                                 $productOptions[] = $selectedProductName;
                             }
                         @endphp
                         <tr class="order-item-row">
-                            <td>
+                            <td data-cell-label="Supplier &amp; Product">
+                                <label class="form-label small text-muted mb-1">Supplier</label>
                                 <select name="items[{{ $index }}][supplier_id]" class="form-select js-supplier-select" required>
                                     <option value="">Select supplier</option>
                                     @foreach ($supplierOptionsData as $supplierOption)
@@ -180,8 +318,7 @@
                                     @endforeach
                                 </select>
                                 @error("items.$index.supplier_id")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
-                            </td>
-                            <td>
+                                <label class="form-label small text-muted mb-1 mt-2">Product</label>
                                 <select name="items[{{ $index }}][product_name]" class="form-select js-product-select" data-selected-product="{{ $selectedProductName }}" @disabled($selectedSupplierId === '') required>
                                     <option value="">{{ $selectedSupplierId !== '' ? 'Select product' : 'Select supplier first' }}</option>
                                     @foreach ($productOptions as $productOption)
@@ -190,29 +327,142 @@
                                 </select>
                                 @error("items.$index.product_name")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                             </td>
-                            <td>
-                                <textarea name="items[{{ $index }}][specification]" rows="2" class="form-control">{{ data_get($item, 'specification') }}</textarea>
-                                @error("items.$index.specification")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                            <td data-cell-label="Item Identity">
+                                <div class="row g-2">
+                                    <div class="col-12 col-xl-6">
+                                        <label class="form-label small text-muted mb-1">Item Code</label>
+                                        <input type="text" name="items[{{ $index }}][item_code]" class="form-control" value="{{ data_get($item, 'item_code') }}" placeholder="SN 3144">
+                                        @error("items.$index.item_code")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-12 col-xl-6">
+                                        <label class="form-label small text-muted mb-1">HS Code</label>
+                                        <input type="text" name="items[{{ $index }}][hs_code]" class="form-control" value="{{ data_get($item, 'hs_code') }}" placeholder="940350">
+                                        @error("items.$index.hs_code")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small text-muted mb-1">Specification / Description</label>
+                                        <textarea name="items[{{ $index }}][specification]" rows="3" class="form-control" placeholder="Warna, material, detail produk, packing remark">{{ data_get($item, 'specification') }}</textarea>
+                                        @error("items.$index.specification")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                </div>
                             </td>
-                            <td>
-                                <input type="text" inputmode="decimal" name="items[{{ $index }}][quantity_kg]" class="form-control js-qty js-numeric-input" value="{{ data_get($item, 'quantity_kg') }}" required>
-                                @error("items.$index.quantity_kg")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                            <td data-cell-label="Qty &amp; Pricing">
+                                <div class="row g-2">
+                                    <div class="col-12 col-xl-6">
+                                        <label class="form-label small text-muted mb-1">Qty (kg)</label>
+                                        <input type="text" inputmode="decimal" name="items[{{ $index }}][quantity_kg]" class="form-control js-qty js-numeric-input" value="{{ data_get($item, 'quantity_kg') }}" required>
+                                        @error("items.$index.quantity_kg")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-12 col-xl-6">
+                                        <label class="form-label small text-muted mb-1">Qty (pcs)</label>
+                                        <input type="text" inputmode="numeric" name="items[{{ $index }}][quantity_pcs]" class="form-control js-numeric-input" value="{{ data_get($item, 'quantity_pcs') }}" placeholder="180">
+                                        @error("items.$index.quantity_pcs")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-12 col-xl-4">
+                                        <label class="form-label small text-muted mb-1">Unit</label>
+                                        <select name="items[{{ $index }}][quantity_unit]" class="form-select">
+                                            @foreach ($itemQuantityUnitOptions as $option)
+                                                <option value="{{ $option['value'] }}" @selected(data_get($item, 'quantity_unit', 'PCS') === $option['value'])>{{ $option['label'] }}</option>
+                                            @endforeach
+                                        </select>
+                                        @error("items.$index.quantity_unit")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-12 col-xl-4">
+                                        <label class="form-label small text-muted mb-1">Selling Price</label>
+                                        <input type="text" inputmode="decimal" name="items[{{ $index }}][selling_price]" class="form-control js-selling-price js-numeric-input" value="{{ data_get($item, 'selling_price') }}" required>
+                                        @error("items.$index.selling_price")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-12 col-xl-4">
+                                        <label class="form-label small text-muted mb-1">Product Cost</label>
+                                        <input type="text" inputmode="decimal" name="items[{{ $index }}][buying_price]" class="form-control js-buying-price js-numeric-input" value="{{ data_get($item, 'buying_price') }}" required>
+                                        @error("items.$index.buying_price")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                </div>
                             </td>
-                            <td>
-                                <input type="text" inputmode="decimal" name="items[{{ $index }}][selling_price]" class="form-control js-selling-price js-numeric-input" value="{{ data_get($item, 'selling_price') }}" required>
-                                @error("items.$index.selling_price")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                            <td data-cell-label="Packaging Detail">
+                                <div class="row g-2">
+                                    <div class="col-12 col-xl-6">
+                                        <label class="form-label small text-muted mb-1">Pieces / Package</label>
+                                        <input type="text" inputmode="numeric" name="items[{{ $index }}][pieces_per_package]" class="form-control js-numeric-input" value="{{ data_get($item, 'pieces_per_package') }}" placeholder="2">
+                                        @error("items.$index.pieces_per_package")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-12 col-xl-6">
+                                        <label class="form-label small text-muted mb-1">Package Count</label>
+                                        <input type="text" inputmode="numeric" name="items[{{ $index }}][package_count]" class="form-control js-numeric-input" value="{{ data_get($item, 'package_count') }}" placeholder="90">
+                                        @error("items.$index.package_count")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-12 col-xl-6">
+                                        <label class="form-label small text-muted mb-1">Inner Package</label>
+                                        <select name="items[{{ $index }}][package_type]" class="form-select">
+                                            <option value="">Select packaging</option>
+                                            @foreach ($itemPackagingTypeOptions as $option)
+                                                <option value="{{ $option['value'] }}" @selected(data_get($item, 'package_type') === $option['value'])>{{ $option['label'] }}</option>
+                                            @endforeach
+                                        </select>
+                                        @error("items.$index.package_type")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-12 col-xl-6">
+                                        <label class="form-label small text-muted mb-1">Outer Package</label>
+                                        <select name="items[{{ $index }}][outer_package_type]" class="form-select">
+                                            <option value="">Select outer packaging</option>
+                                            @foreach ($itemOuterPackagingTypeOptions as $option)
+                                                <option value="{{ $option['value'] }}" @selected(data_get($item, 'outer_package_type') === $option['value'])>{{ $option['label'] }}</option>
+                                            @endforeach
+                                        </select>
+                                        @error("items.$index.outer_package_type")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small text-muted mb-1">Packaging Notes</label>
+                                        <textarea name="items[{{ $index }}][package_notes]" rows="2" class="form-control" placeholder="Contoh: 2 pcs per box, kemudian 6 box di-wrap kayu">{{ data_get($item, 'package_notes') }}</textarea>
+                                        @error("items.$index.package_notes")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                </div>
                             </td>
-                            <td>
-                                <input type="text" inputmode="decimal" name="items[{{ $index }}][buying_price]" class="form-control js-buying-price js-numeric-input" value="{{ data_get($item, 'buying_price') }}" required>
-                                @error("items.$index.buying_price")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                            <td data-cell-label="Weight &amp; Size">
+                                <div class="row g-2">
+                                    <div class="col-4">
+                                        <label class="form-label small text-muted mb-1">L (cm)</label>
+                                        <input type="text" inputmode="decimal" name="items[{{ $index }}][length_cm]" class="form-control js-numeric-input" value="{{ data_get($item, 'length_cm') }}" placeholder="40">
+                                        @error("items.$index.length_cm")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label small text-muted mb-1">W (cm)</label>
+                                        <input type="text" inputmode="decimal" name="items[{{ $index }}][width_cm]" class="form-control js-numeric-input" value="{{ data_get($item, 'width_cm') }}" placeholder="40">
+                                        @error("items.$index.width_cm")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label small text-muted mb-1">H (cm)</label>
+                                        <input type="text" inputmode="decimal" name="items[{{ $index }}][height_cm]" class="form-control js-numeric-input" value="{{ data_get($item, 'height_cm') }}" placeholder="75">
+                                        @error("items.$index.height_cm")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small text-muted mb-1">Dimension Unit</label>
+                                        <select name="items[{{ $index }}][dimension_unit]" class="form-select">
+                                            @foreach ($itemDimensionUnitOptions as $option)
+                                                <option value="{{ $option['value'] }}" @selected(data_get($item, 'dimension_unit', 'CM') === $option['value'])>{{ $option['label'] }}</option>
+                                            @endforeach
+                                        </select>
+                                        @error("items.$index.dimension_unit")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small text-muted mb-1">Net Weight (kg)</label>
+                                        <input type="text" inputmode="decimal" name="items[{{ $index }}][net_weight_kg]" class="form-control js-numeric-input" value="{{ data_get($item, 'net_weight_kg') }}" placeholder="1123.20">
+                                        @error("items.$index.net_weight_kg")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small text-muted mb-1">Gross Weight (kg)</label>
+                                        <input type="text" inputmode="decimal" name="items[{{ $index }}][gross_weight_kg]" class="form-control js-numeric-input" value="{{ data_get($item, 'gross_weight_kg') }}" placeholder="1900.80">
+                                        @error("items.$index.gross_weight_kg")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                    </div>
+                                </div>
                             </td>
-                            <td>
+                            <td data-cell-label="Product Margin">
                                 <div class="fw-semibold js-line-profit">0</div>
                                 <small class="text-muted js-line-total-sales">Sales Total: 0</small><br>
                                 <small class="text-muted js-line-total-buying">Product Cost Total: 0</small><br>
                                 <small class="text-muted js-line-total-profit">Gross Line Profit: 0</small>
                             </td>
-                            <td class="text-center">
+                            <td class="text-center" data-cell-label="Action">
                                 <button type="button" class="btn btn-sm btn-light-danger js-remove-row">Remove</button>
                             </td>
                         </tr>
@@ -327,6 +577,7 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const tableBody = document.querySelector('#order-items-table tbody');
+            const tableResponsive = document.getElementById('order-items-responsive');
             const addButton = document.getElementById('add-item-row');
             const currencyInput = document.getElementById('currency');
             const summarySales = document.getElementById('summary-sales');
@@ -342,6 +593,20 @@
                 collect($supplierOptionsData)->map(fn ($supplierOption) => '<option value="' . $supplierOption['id'] . '">' . e($supplierOption['label'] . ' - ' . $supplierOption['meta']) . '</option>')->implode('')
             );
             const supplierProductsMap = @json($supplierProductMap);
+            const quantityUnitOptionsHtml = @json(
+                $quantityUnitOptions->map(fn ($option) => '<option value="' . e($option['value']) . '">' . e($option['label']) . '</option>')->implode('')
+            );
+            const dimensionUnitOptionsHtml = @json(
+                $dimensionUnitOptions->map(fn ($option) => '<option value="' . e($option['value']) . '">' . e($option['label']) . '</option>')->implode('')
+            );
+            const packagingTypeOptionsHtml = @json(
+                '<option value="">Select packaging</option>' .
+                $packagingTypeOptions->map(fn ($option) => '<option value="' . e($option['value']) . '">' . e($option['label']) . '</option>')->implode('')
+            );
+            const outerPackagingTypeOptionsHtml = @json(
+                '<option value="">Select outer packaging</option>' .
+                $outerPackagingTypeOptions->map(fn ($option) => '<option value="' . e($option['value']) . '">' . e($option['label']) . '</option>')->implode('')
+            );
             const numericFieldsSelector = '.js-numeric-input';
 
             const escapeHtml = (value) => String(value)
@@ -485,6 +750,14 @@
                 });
             };
 
+            const syncOrderItemsLayout = () => {
+                if (!tableResponsive) {
+                    return;
+                }
+
+                tableResponsive.classList.toggle('order-items-compact', tableResponsive.clientWidth < 1680);
+            };
+
             const formatMoney = (value) => {
                 const currency = (currencyInput.value || 'USD').toUpperCase();
                 const numericValue = Number(value || 0);
@@ -548,33 +821,113 @@
                 const row = document.createElement('tr');
                 row.className = 'order-item-row';
                 row.innerHTML = `
-                    <td>
+                    <td data-cell-label="Supplier &amp; Product">
+                        <label class="form-label small text-muted mb-1">Supplier</label>
                         <select name="items[${index}][supplier_id]" class="form-select js-supplier-select" required>${supplierOptionsHtml}</select>
-                    </td>
-                    <td>
+                        <label class="form-label small text-muted mb-1 mt-2">Product</label>
                         <select name="items[${index}][product_name]" class="form-select js-product-select" disabled required>
                             <option value="">Select supplier first</option>
                         </select>
                     </td>
-                    <td>
-                        <textarea name="items[${index}][specification]" rows="2" class="form-control"></textarea>
+                    <td data-cell-label="Item Identity">
+                        <div class="row g-2">
+                            <div class="col-12 col-xl-6">
+                                <label class="form-label small text-muted mb-1">Item Code</label>
+                                <input type="text" name="items[${index}][item_code]" class="form-control" placeholder="SN 3144">
+                            </div>
+                            <div class="col-12 col-xl-6">
+                                <label class="form-label small text-muted mb-1">HS Code</label>
+                                <input type="text" name="items[${index}][hs_code]" class="form-control" placeholder="940350">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small text-muted mb-1">Specification / Description</label>
+                                <textarea name="items[${index}][specification]" rows="3" class="form-control" placeholder="Warna, material, detail produk, packing remark"></textarea>
+                            </div>
+                        </div>
                     </td>
-                    <td>
-                        <input type="text" inputmode="decimal" name="items[${index}][quantity_kg]" class="form-control js-qty js-numeric-input" required>
+                    <td data-cell-label="Qty &amp; Pricing">
+                        <div class="row g-2">
+                            <div class="col-12 col-xl-6">
+                                <label class="form-label small text-muted mb-1">Qty (kg)</label>
+                                <input type="text" inputmode="decimal" name="items[${index}][quantity_kg]" class="form-control js-qty js-numeric-input" required>
+                            </div>
+                            <div class="col-12 col-xl-6">
+                                <label class="form-label small text-muted mb-1">Qty (pcs)</label>
+                                <input type="text" inputmode="numeric" name="items[${index}][quantity_pcs]" class="form-control js-numeric-input" placeholder="180">
+                            </div>
+                            <div class="col-12 col-xl-4">
+                                <label class="form-label small text-muted mb-1">Unit</label>
+                                <select name="items[${index}][quantity_unit]" class="form-select">${quantityUnitOptionsHtml}</select>
+                            </div>
+                            <div class="col-12 col-xl-4">
+                                <label class="form-label small text-muted mb-1">Selling Price</label>
+                                <input type="text" inputmode="decimal" name="items[${index}][selling_price]" class="form-control js-selling-price js-numeric-input" required>
+                            </div>
+                            <div class="col-12 col-xl-4">
+                                <label class="form-label small text-muted mb-1">Product Cost</label>
+                                <input type="text" inputmode="decimal" name="items[${index}][buying_price]" class="form-control js-buying-price js-numeric-input" required>
+                            </div>
+                        </div>
                     </td>
-                    <td>
-                        <input type="text" inputmode="decimal" name="items[${index}][selling_price]" class="form-control js-selling-price js-numeric-input" required>
+                    <td data-cell-label="Packaging Detail">
+                        <div class="row g-2">
+                            <div class="col-12 col-xl-6">
+                                <label class="form-label small text-muted mb-1">Pieces / Package</label>
+                                <input type="text" inputmode="numeric" name="items[${index}][pieces_per_package]" class="form-control js-numeric-input" placeholder="2">
+                            </div>
+                            <div class="col-12 col-xl-6">
+                                <label class="form-label small text-muted mb-1">Package Count</label>
+                                <input type="text" inputmode="numeric" name="items[${index}][package_count]" class="form-control js-numeric-input" placeholder="90">
+                            </div>
+                            <div class="col-12 col-xl-6">
+                                <label class="form-label small text-muted mb-1">Inner Package</label>
+                                <select name="items[${index}][package_type]" class="form-select">${packagingTypeOptionsHtml}</select>
+                            </div>
+                            <div class="col-12 col-xl-6">
+                                <label class="form-label small text-muted mb-1">Outer Package</label>
+                                <select name="items[${index}][outer_package_type]" class="form-select">${outerPackagingTypeOptionsHtml}</select>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small text-muted mb-1">Packaging Notes</label>
+                                <textarea name="items[${index}][package_notes]" rows="2" class="form-control" placeholder="Contoh: 2 pcs per box, kemudian 6 box di-wrap kayu"></textarea>
+                            </div>
+                        </div>
                     </td>
-                    <td>
-                        <input type="text" inputmode="decimal" name="items[${index}][buying_price]" class="form-control js-buying-price js-numeric-input" required>
+                    <td data-cell-label="Weight &amp; Size">
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <label class="form-label small text-muted mb-1">L (cm)</label>
+                                <input type="text" inputmode="decimal" name="items[${index}][length_cm]" class="form-control js-numeric-input" placeholder="40">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small text-muted mb-1">W (cm)</label>
+                                <input type="text" inputmode="decimal" name="items[${index}][width_cm]" class="form-control js-numeric-input" placeholder="40">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label small text-muted mb-1">H (cm)</label>
+                                <input type="text" inputmode="decimal" name="items[${index}][height_cm]" class="form-control js-numeric-input" placeholder="75">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small text-muted mb-1">Dimension Unit</label>
+                                <select name="items[${index}][dimension_unit]" class="form-select">${dimensionUnitOptionsHtml}</select>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-1">Net Weight (kg)</label>
+                                <input type="text" inputmode="decimal" name="items[${index}][net_weight_kg]" class="form-control js-numeric-input" placeholder="1123.20">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small text-muted mb-1">Gross Weight (kg)</label>
+                                <input type="text" inputmode="decimal" name="items[${index}][gross_weight_kg]" class="form-control js-numeric-input" placeholder="1900.80">
+                            </div>
+                        </div>
                     </td>
-                    <td>
+                    <td data-cell-label="Product Margin">
                         <div class="fw-semibold js-line-profit">0</div>
                         <small class="text-muted js-line-total-sales">Sales Total: 0</small><br>
                         <small class="text-muted js-line-total-buying">Product Cost Total: 0</small><br>
                         <small class="text-muted js-line-total-profit">Gross Line Profit: 0</small>
                     </td>
-                    <td class="text-center">
+                    <td class="text-center" data-cell-label="Action">
                         <button type="button" class="btn btn-sm btn-light-danger js-remove-row">Remove</button>
                     </td>
                 `;
@@ -582,6 +935,7 @@
                 tableBody.appendChild(row);
                 bindNumericGuards(row);
                 syncProductSelect(row);
+                syncOrderItemsLayout();
                 refreshSummary();
             });
 
@@ -594,6 +948,14 @@
                 if (tableBody.querySelectorAll('.order-item-row').length === 1) {
                     removeButton.closest('.order-item-row').querySelectorAll('input, textarea, select').forEach((field) => {
                         field.value = '';
+
+                        if (field.name.endsWith('[quantity_unit]')) {
+                            field.value = 'PCS';
+                        }
+
+                        if (field.name.endsWith('[dimension_unit]')) {
+                            field.value = 'CM';
+                        }
                     });
                     syncProductSelect(removeButton.closest('.order-item-row'));
                 } else {
@@ -618,8 +980,14 @@
 
             extraCostInputs.forEach((input) => input.addEventListener('input', refreshSummary));
             currencyInput.addEventListener('input', refreshSummary);
+            if (window.ResizeObserver && tableResponsive) {
+                new ResizeObserver(syncOrderItemsLayout).observe(tableResponsive);
+            } else {
+                window.addEventListener('resize', syncOrderItemsLayout);
+            }
             bindNumericGuards();
             initializeProductSelects();
+            syncOrderItemsLayout();
             refreshSummary();
         });
     </script>

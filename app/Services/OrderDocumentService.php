@@ -11,6 +11,7 @@ class OrderDocumentService
 {
     public function __construct(
         private readonly CodeGeneratorService $codeGeneratorService,
+        private readonly ArkipelaParameterService $arkipelaParameterService,
     ) {
     }
 
@@ -41,6 +42,11 @@ class OrderDocumentService
         $client = $order->client;
         $items = $order->items->values();
         $totalQuantityKg = (float) $items->sum(fn ($item) => (float) $item->quantity_kg);
+        $totalQuantityPcs = (int) $items->sum(fn ($item) => (int) ($item->quantity_pcs ?? 0));
+        $totalPackageCount = (int) $items->sum(fn ($item) => $this->resolvePackageCount($item));
+        $totalNetWeightKg = (float) $items->sum(fn ($item) => $this->resolveNetWeightKg($item));
+        $totalGrossWeightKg = (float) $items->sum(fn ($item) => $this->resolveGrossWeightKg($item));
+        $totalCbm = (float) $items->sum(fn ($item) => $this->resolveTotalCbm($item));
 
         return [
             'document_type' => $documentType->value,
@@ -75,12 +81,34 @@ class OrderDocumentService
                 'notes' => $order->notes,
             ],
             'items' => $items->map(function ($item, int $index) use ($order) {
+                $packageCount = $this->resolvePackageCount($item);
+                $cbmPerPackage = $this->resolveCbmPerPackage($item);
+                $totalCbm = $this->resolveTotalCbm($item);
+
                 return [
                     'line_number' => $index + 1,
+                    'item_code' => $item->item_code,
                     'supplier_name' => $item->supplier?->supplier_name,
                     'product_name' => $item->product_name,
+                    'hs_code' => $item->hs_code,
                     'specification' => $item->specification,
                     'quantity_kg' => (float) $item->quantity_kg,
+                    'quantity_pcs' => $item->quantity_pcs ? (int) $item->quantity_pcs : null,
+                    'quantity_unit' => $item->quantity_unit ?: 'PCS',
+                    'pieces_per_package' => $item->pieces_per_package ? (int) $item->pieces_per_package : null,
+                    'package_count' => $packageCount ?: null,
+                    'package_type' => $item->package_type,
+                    'outer_package_type' => $item->outer_package_type,
+                    'length_cm' => $item->length_cm !== null ? (float) $item->length_cm : null,
+                    'width_cm' => $item->width_cm !== null ? (float) $item->width_cm : null,
+                    'height_cm' => $item->height_cm !== null ? (float) $item->height_cm : null,
+                    'dimension_unit' => $item->dimension_unit ?: 'CM',
+                    'net_weight_kg' => $this->resolveNetWeightKg($item),
+                    'gross_weight_kg' => $this->resolveGrossWeightKg($item),
+                    'cbm_per_package' => $cbmPerPackage > 0 ? $cbmPerPackage : null,
+                    'total_cbm' => $totalCbm > 0 ? $totalCbm : null,
+                    'package_notes' => $item->package_notes,
+                    'packaging_summary' => $this->buildPackagingSummary($item, $packageCount),
                     'selling_price' => (float) $item->selling_price,
                     'buying_price' => (float) $item->buying_price,
                     'line_total_sales' => (float) $item->line_total_sales,
@@ -91,6 +119,11 @@ class OrderDocumentService
             'totals' => [
                 'line_item_count' => $items->count(),
                 'total_quantity_kg' => round($totalQuantityKg, 2),
+                'total_quantity_pcs' => $totalQuantityPcs,
+                'total_package_count' => $totalPackageCount,
+                'total_net_weight_kg' => round($totalNetWeightKg, 2),
+                'total_gross_weight_kg' => round($totalGrossWeightKg, 2),
+                'total_cbm' => round($totalCbm, 4),
                 'subtotal_sales' => (float) $order->subtotal_sales,
                 'subtotal_buying' => (float) $order->subtotal_buying,
                 'gross_profit' => (float) $order->gross_profit,
@@ -100,10 +133,92 @@ class OrderDocumentService
             'packing_summary' => [
                 'line_item_count' => $items->count(),
                 'total_quantity_kg' => round($totalQuantityKg, 2),
+                'total_quantity_pcs' => $totalQuantityPcs,
+                'total_package_count' => $totalPackageCount,
+                'total_net_weight_kg' => round($totalNetWeightKg, 2),
+                'total_gross_weight_kg' => round($totalGrossWeightKg, 2),
+                'total_cbm' => round($totalCbm, 4),
                 'shipment_mode' => $order->shipment_mode,
                 'destination_port' => $order->destination_port,
                 'notes' => $order->notes,
             ],
         ];
+    }
+
+    private function resolvePackageCount($item): int
+    {
+        if (! empty($item->package_count)) {
+            return (int) $item->package_count;
+        }
+
+        if (! empty($item->quantity_pcs) && ! empty($item->pieces_per_package)) {
+            return (int) ceil(((int) $item->quantity_pcs) / ((int) $item->pieces_per_package));
+        }
+
+        return 0;
+    }
+
+    private function resolveNetWeightKg($item): float
+    {
+        return round((float) ($item->net_weight_kg ?? $item->quantity_kg ?? 0), 2);
+    }
+
+    private function resolveGrossWeightKg($item): float
+    {
+        return round((float) ($item->gross_weight_kg ?? $item->net_weight_kg ?? $item->quantity_kg ?? 0), 2);
+    }
+
+    private function resolveCbmPerPackage($item): float
+    {
+        $length = (float) ($item->length_cm ?? 0);
+        $width = (float) ($item->width_cm ?? 0);
+        $height = (float) ($item->height_cm ?? 0);
+
+        if ($length <= 0 || $width <= 0 || $height <= 0) {
+            return 0;
+        }
+
+        $factor = $this->arkipelaParameterService->dimensionToCmFactor($item->dimension_unit ?? 'CM');
+        $lengthInCm = $length * $factor;
+        $widthInCm = $width * $factor;
+        $heightInCm = $height * $factor;
+
+        return round(($lengthInCm * $widthInCm * $heightInCm) / 1000000, 4);
+    }
+
+    private function resolveTotalCbm($item): float
+    {
+        $cbmPerPackage = $this->resolveCbmPerPackage($item);
+        $packageCount = $this->resolvePackageCount($item);
+
+        if ($cbmPerPackage <= 0 || $packageCount <= 0) {
+            return 0;
+        }
+
+        return round($cbmPerPackage * $packageCount, 4);
+    }
+
+    private function buildPackagingSummary($item, int $packageCount): ?string
+    {
+        $segments = [];
+        $quantityUnit = $item->quantity_unit ?: 'PCS';
+
+        if (! empty($item->pieces_per_package) && ! empty($item->package_type)) {
+            $segments[] = "{$item->pieces_per_package} {$quantityUnit} / {$item->package_type}";
+        }
+
+        if ($packageCount > 0 && ! empty($item->package_type)) {
+            $segments[] = "{$packageCount} {$item->package_type}";
+        }
+
+        if (! empty($item->outer_package_type)) {
+            $segments[] = "outer: {$item->outer_package_type}";
+        }
+
+        if (! empty($item->package_notes)) {
+            $segments[] = $item->package_notes;
+        }
+
+        return $segments !== [] ? implode(' | ', $segments) : null;
     }
 }
