@@ -21,6 +21,7 @@ class RolePermissionSeeder extends Seeder
         $rolePermissions = [
             UserRole::OWNER->value => UserPermission::cases(),
             UserRole::ADMIN_EXPORT->value => [
+                UserPermission::PRODUCTS_VIEW,
                 UserPermission::SUPPLIERS_VIEW,
                 UserPermission::CLIENTS_VIEW,
                 UserPermission::ORDERS_VIEW,
@@ -28,18 +29,23 @@ class RolePermissionSeeder extends Seeder
                 UserPermission::REPORTS_VIEW,
             ],
             UserRole::PROCUREMENT->value => [
+                UserPermission::PRODUCTS_VIEW,
+                UserPermission::PRODUCTS_MANAGE,
                 UserPermission::SUPPLIERS_VIEW,
                 UserPermission::SUPPLIERS_MANAGE,
                 UserPermission::ORDERS_VIEW,
             ],
             UserRole::SALES->value => [
+                UserPermission::PRODUCTS_VIEW,
                 UserPermission::CLIENTS_VIEW,
                 UserPermission::CLIENTS_MANAGE,
             ],
             UserRole::QC_ADMIN->value => [
+                UserPermission::PRODUCTS_VIEW,
                 UserPermission::ORDERS_VIEW,
             ],
             UserRole::FINANCE->value => [
+                UserPermission::PRODUCTS_VIEW,
                 UserPermission::ORDERS_VIEW,
                 UserPermission::REPORTS_VIEW,
             ],

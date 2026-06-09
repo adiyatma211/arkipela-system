@@ -11,6 +11,8 @@ use App\Http\Requests\OrderRequest;
 use App\Models\Client;
 use App\Models\Document;
 use App\Models\Order;
+use App\Models\Product;
+use App\Models\ProductSku;
 use App\Models\Supplier;
 use App\Services\ActivityLogService;
 use App\Services\ArkipelaParameterService;
@@ -175,8 +177,11 @@ class OrderController extends Controller
             'itemsData' => $order->items
                 ->map(fn ($item) => [
                     'supplier_id' => $item->supplier_id,
-                    'item_code' => $item->item_code,
+                    'product_id' => $item->product_id,
+                    'product_sku_id' => $item->product_sku_id,
                     'product_name' => $item->product_name,
+                    'variant_name' => $item->variant_name,
+                    'item_code' => $item->item_code,
                     'hs_code' => $item->hs_code,
                     'specification' => $item->specification,
                     'quantity_kg' => $item->quantity_kg,
@@ -316,7 +321,7 @@ class OrderController extends Controller
     private function availableSuppliers()
     {
         return Supplier::query()
-            ->with('products')
+            ->with(['products.product.skus', 'products.productSku'])
             ->where('approval_status', SupplierApprovalStatus::APPROVED->value)
             ->orderBy('supplier_name')
             ->get(['id', 'supplier_name', 'supplier_code', 'approval_status', 'status', 'products_summary', 'monthly_capacity_kg', 'minimum_order_kg']);
@@ -341,8 +346,9 @@ class OrderController extends Controller
     {
         return [
             'supplier_id' => null,
+            'product_id' => null,
+            'product_sku_id' => null,
             'item_code' => '',
-            'product_name' => '',
             'hs_code' => '',
             'specification' => '',
             'quantity_kg' => null,
@@ -366,18 +372,43 @@ class OrderController extends Controller
 
     private function normalizeItems(array $items): array
     {
+        $productIds = collect($items)->pluck('product_id')->filter()->unique()->values()->all();
+        $productSkuIds = collect($items)->pluck('product_sku_id')->filter()->unique()->values()->all();
+
+        $products = Product::query()
+            ->whereIn('id', $productIds)
+            ->get(['id', 'product_name'])
+            ->keyBy('id');
+        $productSkus = ProductSku::query()
+            ->whereIn('id', $productSkuIds)
+            ->get(['id', 'product_id', 'variant_name', 'barcode_number', 'sku_code'])
+            ->keyBy('id');
+
         return collect($items)
-            ->map(function (array $item) {
+            ->map(function (array $item) use ($products, $productSkus) {
                 $quantity = (float) $item['quantity_kg'];
                 $sellingPrice = (float) $item['selling_price'];
                 $buyingPrice = (float) $item['buying_price'];
                 $lineTotalSales = $quantity * $sellingPrice;
                 $lineTotalBuying = $quantity * $buyingPrice;
+                $product = $products->get((int) ($item['product_id'] ?? 0));
+                $productSku = $productSkus->get((int) ($item['product_sku_id'] ?? 0));
+                $packagingSummary = collect([
+                    filled($item['pieces_per_package'] ?? null) ? "{$item['pieces_per_package']} pcs/package" : null,
+                    filled($item['package_count'] ?? null) ? "{$item['package_count']} packages" : null,
+                    $this->normalizeNullableString($item['package_type'] ?? null),
+                    $this->normalizeNullableString($item['outer_package_type'] ?? null),
+                ])->filter()->implode(' | ');
 
                 return [
                     'supplier_id' => $item['supplier_id'] ?: null,
+                    'product_id' => $item['product_id'] ?: null,
+                    'product_sku_id' => $item['product_sku_id'] ?: null,
                     'item_code' => $this->normalizeNullableString($item['item_code'] ?? null),
-                    'product_name' => $item['product_name'],
+                    'product_name' => $product?->product_name ?? 'Unknown Product',
+                    'variant_name' => $this->normalizeNullableString($productSku?->variant_name),
+                    'barcode_number' => $this->normalizeNullableString($productSku?->barcode_number),
+                    'packaging_summary' => $packagingSummary !== '' ? $packagingSummary : null,
                     'hs_code' => $this->normalizeNullableString($item['hs_code'] ?? null),
                     'specification' => $item['specification'] ?: null,
                     'quantity_kg' => round($quantity, 2),

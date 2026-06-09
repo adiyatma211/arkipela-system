@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\OrderStatus;
 use App\Enums\SupplierApprovalStatus;
+use App\Models\ProductSku;
 use App\Models\Supplier;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -53,8 +54,9 @@ class OrderRequest extends FormRequest
                 Rule::exists('suppliers', 'id')->where(fn ($query) => $query
                     ->where('approval_status', SupplierApprovalStatus::APPROVED->value)),
             ],
+            'items.*.product_id' => ['required', 'exists:products,id'],
+            'items.*.product_sku_id' => ['nullable', 'exists:product_skus,id'],
             'items.*.item_code' => ['nullable', 'string', 'max:255'],
-            'items.*.product_name' => ['required', 'string', 'max:255'],
             'items.*.hs_code' => ['nullable', 'string', 'max:255'],
             'items.*.specification' => ['nullable', 'string'],
             'items.*.quantity_kg' => ['required', 'numeric', 'min:0.01'],
@@ -86,8 +88,9 @@ class OrderRequest extends FormRequest
 
                 return [
                     'supplier_id' => filled($row['supplier_id'] ?? null) ? $row['supplier_id'] : null,
+                    'product_id' => filled($row['product_id'] ?? null) ? $row['product_id'] : null,
+                    'product_sku_id' => filled($row['product_sku_id'] ?? null) ? $row['product_sku_id'] : null,
                     'item_code' => trim((string) ($row['item_code'] ?? '')),
-                    'product_name' => trim((string) ($row['product_name'] ?? '')),
                     'hs_code' => trim((string) ($row['hs_code'] ?? '')),
                     'specification' => trim((string) ($row['specification'] ?? '')),
                     'quantity_kg' => $row['quantity_kg'] ?? null,
@@ -108,8 +111,9 @@ class OrderRequest extends FormRequest
                     'buying_price' => $row['buying_price'] ?? null,
                 ];
             })
-            ->filter(fn (array $item) => $item['product_name'] !== ''
-                || filled($item['supplier_id'])
+            ->filter(fn (array $item) => filled($item['supplier_id'])
+                || filled($item['product_id'])
+                || filled($item['product_sku_id'])
                 || filled($item['item_code'])
                 || filled($item['hs_code'])
                 || filled($item['quantity_kg'])
@@ -153,24 +157,39 @@ class OrderRequest extends FormRequest
 
             foreach ($items as $index => $item) {
                 $supplierId = data_get($item, 'supplier_id');
-                $productName = trim((string) data_get($item, 'product_name'));
+                $productId = data_get($item, 'product_id');
+                $productSkuId = data_get($item, 'product_sku_id');
 
-                if (! $supplierId || $productName === '') {
+                if (! $supplierId || ! $productId) {
                     continue;
                 }
 
                 $supplier = $suppliers->get((int) $supplierId);
                 $validProducts = $supplier?->resolvedProducts()
-                    ->pluck('product_name')
+                    ->pluck('product_id')
                     ->filter()
-                    ->map(fn (string $name) => trim($name))
+                    ->map(fn ($value) => (int) $value)
                     ->all() ?? [];
 
-                if (! in_array($productName, $validProducts, true)) {
+                if (! in_array((int) $productId, $validProducts, true)) {
                     $validator->errors()->add(
-                        "items.$index.product_name",
+                        "items.$index.product_id",
                         'Selected product is not available for the chosen supplier.'
                     );
+                }
+
+                if ($productSkuId) {
+                    $belongsToProduct = ProductSku::query()
+                        ->whereKey($productSkuId)
+                        ->where('product_id', $productId)
+                        ->exists();
+
+                    if (! $belongsToProduct) {
+                        $validator->errors()->add(
+                            "items.$index.product_sku_id",
+                            'Selected SKU does not belong to the chosen product.'
+                        );
+                    }
                 }
 
                 $netWeight = data_get($item, 'net_weight_kg');

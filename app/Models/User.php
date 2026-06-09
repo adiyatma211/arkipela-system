@@ -131,6 +131,7 @@ class User extends Authenticatable
     {
         $routeMap = [
             UserPermission::DASHBOARD_VIEW->value => 'dashboard',
+            UserPermission::PRODUCTS_VIEW->value => 'products.index',
             UserPermission::USERS_VIEW->value => 'settings.users.index',
             UserPermission::USERS_MANAGE->value => 'settings.users.index',
             UserPermission::SETTINGS_MANAGE->value => 'settings.roles.index',

@@ -153,16 +153,28 @@
                                                 <thead>
                                                     <tr>
                                                         <th>Product</th>
+                                                        <th>SKU / Variant</th>
                                                         <th>Monthly Capacity</th>
                                                         <th>Minimum Order</th>
+                                                        <th>Lead Time</th>
+                                                        <th>Packaging</th>
+                                                        <th>Status</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     @foreach ($products as $product)
                                                         <tr>
                                                             <td>{{ $product->product_name }}</td>
+                                                            <td>{{ $product->skuLabel() ?: '-' }}</td>
                                                             <td>{{ $product->monthly_capacity_kg ? number_format((float) $product->monthly_capacity_kg, 0) . ' kg' : '-' }}</td>
                                                             <td>{{ $product->minimum_order_kg ? number_format((float) $product->minimum_order_kg, 0) . ' kg' : '-' }}</td>
+                                                            <td>{{ $product->lead_time_days ? $product->lead_time_days . ' days' : '-' }}</td>
+                                                            <td>{{ $product->packaging_type ?: '-' }}</td>
+                                                            <td>
+                                                                <span class="badge {{ ($product->is_active ?? true) ? 'bg-light-success' : 'bg-light-secondary' }}">
+                                                                    {{ ($product->is_active ?? true) ? 'Active' : 'Inactive' }}
+                                                                </span>
+                                                            </td>
                                                         </tr>
                                                     @endforeach
                                                 </tbody>

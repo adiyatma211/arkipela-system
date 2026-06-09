@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Enums\OrderDocumentType;
 use App\Models\Client;
 use App\Models\Order;
+use App\Models\Product;
+use App\Models\ProductSku;
 use App\Models\Supplier;
 use InvalidArgumentException;
 
@@ -32,6 +34,22 @@ class CodeGeneratorService
         $nextId = $lastId + 1;
 
         return 'ORD-'.str_pad((string) $nextId, 4, '0', STR_PAD_LEFT);
+    }
+
+    public function generateProductCode(): string
+    {
+        $lastId = Product::withTrashed()->max('id') ?? 0;
+        $nextId = $lastId + 1;
+
+        return 'PRD-'.str_pad((string) $nextId, 4, '0', STR_PAD_LEFT);
+    }
+
+    public function generateProductSkuCode(): string
+    {
+        $lastId = ProductSku::withTrashed()->max('id') ?? 0;
+        $nextId = $lastId + 1;
+
+        return 'SKU-'.str_pad((string) $nextId, 4, '0', STR_PAD_LEFT);
     }
 
     public function generateOrderDocumentNumber(OrderDocumentType $documentType, int $documentId, ?int $year = null): string

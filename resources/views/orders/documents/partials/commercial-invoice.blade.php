@@ -83,7 +83,7 @@
         <tr>
             <td rowspan="2">
                 <span class="invoice-cell-label">Exporter</span>
-                <div class="invoice-company">{{ data_get($seller, 'company_name', config('app.name', 'Archipela Web')) }}</div>
+                <div class="invoice-company">{{ data_get($seller, 'company_name', config('app.name', 'ArkipelaSpice Web')) }}</div>
                 <div class="invoice-product-meta">{{ $sellerAddress }}</div>
             </td>
             <td rowspan="2" class="text-center text-top">
@@ -243,6 +243,12 @@
                     <td>{{ data_get($item, 'item_code') ?: 'ITEM-' . str_pad((string) data_get($item, 'line_number', $loop->iteration), 2, '0', STR_PAD_LEFT) }}</td>
                     <td>
                         <div class="invoice-product-title">{{ data_get($item, 'product_name', '-') }}</div>
+                        @if (filled(data_get($item, 'variant_name')))
+                            <div class="invoice-product-meta">Variant: {{ data_get($item, 'variant_name') }}</div>
+                        @endif
+                        @if (filled(data_get($item, 'barcode_number')))
+                            <div class="invoice-product-meta invoice-muted">Barcode: {{ data_get($item, 'barcode_number') }}</div>
+                        @endif
                         <div class="invoice-product-meta">{{ data_get($item, 'specification', '-') }}</div>
                         @if (filled(data_get($item, 'packaging_summary')))
                             <div class="invoice-product-meta invoice-muted">Packing: {{ data_get($item, 'packaging_summary') }}</div>
@@ -301,7 +307,7 @@
         <tr>
             <td rowspan="4">
                 <span class="invoice-cell-label">Additional Info / Seller Notes</span>
-                <div><strong>Seller:</strong> {{ data_get($seller, 'company_name', config('app.name', 'Archipela Web')) }}</div>
+                <div><strong>Seller:</strong> {{ data_get($seller, 'company_name', config('app.name', 'Arkipela Web')) }}</div>
                 <div><strong>Origin:</strong> {{ data_get($seller, 'country', 'Indonesia') }}</div>
                 <div><strong>Buyer:</strong> {{ data_get($buyer, 'company_name', '-') }}</div>
                 <div><strong>Total Qty:</strong> {{ $totalQuantityPcs > 0 ? number_format($totalQuantityPcs) . ' PCS' : $pageQuantity . ' KG' }}</div>
@@ -363,6 +369,9 @@
                         class="invoice-photo-thumb">
                     <div class="invoice-photo-title">
                         {{ data_get($photo, 'product_name', '-') }}
+                        @if (filled(data_get($photo, 'variant_name')))
+                            - {{ data_get($photo, 'variant_name') }}
+                        @endif
                         @if (filled(data_get($photo, 'item_code')))
                             ({{ data_get($photo, 'item_code') }})
                         @endif
@@ -371,6 +380,9 @@
                         Supplier: {{ data_get($photo, 'supplier_name', '-') }}<br>
                         Line: {{ data_get($photo, 'line_number', '-') }} |
                         Photo {{ data_get($photo, 'photo_index', '-') }}<br>
+                        @if (filled(data_get($photo, 'barcode_number')))
+                            Barcode: {{ data_get($photo, 'barcode_number') }}<br>
+                        @endif
                         @if (filled(data_get($photo, 'caption')))
                             Caption: {{ data_get($photo, 'caption') }}
                         @else

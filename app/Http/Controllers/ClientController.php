@@ -67,7 +67,7 @@ class ClientController extends Controller
     {
         return view('clients.create', [
             'pageTitle' => 'Add Client',
-            'pageSubtitle' => 'Input buyer atau prospect baru ke pipeline CRM Archipela.',
+            'pageSubtitle' => 'Input buyer atau prospect baru ke pipeline CRM ArkipelaSpice.',
             'client' => new Client([
                 'country' => 'Indonesia',
                 'currency' => 'USD',

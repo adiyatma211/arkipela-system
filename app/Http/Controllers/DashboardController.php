@@ -340,7 +340,7 @@ class DashboardController extends Controller
 
         return view('dashboard.index', [
             'pageTitle' => 'Dashboard Owner',
-            'pageSubtitle' => 'Ringkasan utama operasional export Archipela berdasarkan data order, client, supplier, dan dokumen yang tersedia saat ini.',
+            'pageSubtitle' => 'Ringkasan utama operasional export ArkipelaSpice berdasarkan data order, client, supplier, dan dokumen yang tersedia saat ini.',
             'summaryCards' => $summaryCards,
             'salesPipeline' => $salesPipeline,
             'activeOrders' => $activeOrderSummary,

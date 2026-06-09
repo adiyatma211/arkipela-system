@@ -6,7 +6,10 @@ use App\Enums\SupplierApprovalStatus;
 use App\Enums\SupplierPhotoType;
 use App\Enums\SupplierStatus;
 use App\Enums\SupplierType;
+use App\Enums\UserPermission;
 use App\Http\Requests\SupplierRequest;
+use App\Models\Product;
+use App\Models\ProductSku;
 use App\Models\Supplier;
 use App\Models\SupplierProduct;
 use App\Models\User;
@@ -15,6 +18,7 @@ use App\Services\CodeGeneratorService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -50,7 +54,12 @@ class SupplierController extends Controller
                         ->orWhere('pic_name', 'like', "%{$search}%")
                         ->orWhere('city', 'like', "%{$search}%")
                         ->orWhere('province', 'like', "%{$search}%")
-                        ->orWhereHas('products', fn ($productQuery) => $productQuery->where('product_name', 'like', "%{$search}%"));
+                        ->orWhereHas('products', function ($productQuery) use ($search) {
+                            $productQuery
+                                ->where('product_name', 'like', "%{$search}%")
+                                ->orWhereHas('product', fn ($relationQuery) => $relationQuery->where('product_name', 'like', "%{$search}%"))
+                                ->orWhereHas('productSku', fn ($relationQuery) => $relationQuery->where('variant_name', 'like', "%{$search}%"));
+                        });
                 });
             })
             ->when($filters['status'], fn ($query, $status) => $query->where('status', $status))
@@ -62,7 +71,7 @@ class SupplierController extends Controller
 
         return view('suppliers.index', [
             'pageTitle' => 'Supplier Management',
-            'pageSubtitle' => 'Kelola supplier sourcing Archipela dengan filter, status, approval owner, dan detail operasional dasar.',
+            'pageSubtitle' => 'Kelola supplier sourcing ArkipelaSpice dengan filter, status, approval owner, dan detail operasional dasar.',
             'suppliers' => $suppliers,
             'filters' => $filters,
             'statusOptions' => SupplierStatus::options(),
@@ -90,6 +99,8 @@ class SupplierController extends Controller
                 'approval_status' => SupplierApprovalStatus::PENDING->value,
             ]),
             'productRows' => $this->emptyProductRows(),
+            'productOptions' => $this->productOptions(),
+            'productSkuMap' => $this->productSkuMap(),
             'photoOptions' => SupplierPhotoType::options(),
             'statusOptions' => SupplierStatus::options(),
             'statusLabelMap' => $this->statusLabelMap(),
@@ -177,7 +188,7 @@ class SupplierController extends Controller
             'typeLabelMap' => $this->typeLabelMap(),
             'canManageOperationalStatus' => $user?->isOwner() ?? false,
             'canApproveSupplier' => $user?->isOwner() ?? false,
-            'canSubmitSupplier' => $user && ! $user->isOwner() && $user->hasPermission(\App\Enums\UserPermission::SUPPLIERS_MANAGE->value),
+            'canSubmitSupplier' => $user && ! $user->isOwner() && $user->hasPermission(UserPermission::SUPPLIERS_MANAGE->value),
         ]);
     }
 
@@ -191,6 +202,8 @@ class SupplierController extends Controller
             'pageSubtitle' => "Update data supplier {$supplier->supplier_code}.",
             'supplier' => $supplier->load(['products', 'photos', 'submitter', 'approver', 'rejector']),
             'productRows' => $this->productRowsForForm($supplier->load('products')),
+            'productOptions' => $this->productOptions(),
+            'productSkuMap' => $this->productSkuMap(),
             'photoOptions' => SupplierPhotoType::options(),
             'photoTypeLabelMap' => $this->photoTypeLabelMap(),
             'statusOptions' => SupplierStatus::options(),
@@ -449,9 +462,14 @@ class SupplierController extends Controller
         $rows = $supplier->resolvedProducts()
             ->map(function (SupplierProduct $product) {
                 return [
-                    'product_name' => $product->product_name,
+                    'product_id' => $product->product_id ?: $this->resolveLegacyProductId($product->product_name),
+                    'product_sku_id' => $product->product_sku_id,
                     'monthly_capacity_kg' => $product->monthly_capacity_kg,
                     'minimum_order_kg' => $product->minimum_order_kg,
+                    'lead_time_days' => $product->lead_time_days,
+                    'packaging_type' => $product->packaging_type,
+                    'is_active' => $product->is_active ?? true,
+                    'notes' => $product->notes,
                 ];
             })
             ->values()
@@ -463,9 +481,14 @@ class SupplierController extends Controller
     private function emptyProductRows(): array
     {
         return [[
-            'product_name' => '',
+            'product_id' => null,
+            'product_sku_id' => null,
             'monthly_capacity_kg' => null,
             'minimum_order_kg' => null,
+            'lead_time_days' => null,
+            'packaging_type' => '',
+            'is_active' => true,
+            'notes' => '',
         ]];
     }
 
@@ -473,14 +496,27 @@ class SupplierController extends Controller
     {
         $supplier->products()->delete();
 
+        $products = Product::query()
+            ->whereIn('id', collect($productRows)->pluck('product_id')->filter()->all())
+            ->get(['id', 'product_name'])
+            ->keyBy('id');
+
         $supplier->products()->createMany(
             collect($productRows)
                 ->values()
-                ->map(function (array $productRow, int $index) {
+                ->map(function (array $productRow, int $index) use ($products) {
+                    $product = $products->get((int) $productRow['product_id']);
+
                     return [
-                        'product_name' => $productRow['product_name'],
+                        'product_id' => $product?->id,
+                        'product_sku_id' => $productRow['product_sku_id'] ?: null,
+                        'product_name' => $product?->product_name ?? 'Unknown Product',
                         'monthly_capacity_kg' => $productRow['monthly_capacity_kg'],
                         'minimum_order_kg' => $productRow['minimum_order_kg'],
+                        'lead_time_days' => $productRow['lead_time_days'],
+                        'packaging_type' => $this->normalizeNullableString($productRow['packaging_type'] ?? null),
+                        'is_active' => (bool) ($productRow['is_active'] ?? false),
+                        'notes' => $this->normalizeNullableString($productRow['notes'] ?? null),
                         'sort_order' => $index,
                     ];
                 })
@@ -641,9 +677,14 @@ class SupplierController extends Controller
     {
         return $supplier->resolvedProducts()
             ->map(fn (SupplierProduct $product) => [
-                'product_name' => $product->product_name,
+                'product_id' => $product->product_id ?: $this->resolveLegacyProductId($product->product_name),
+                'product_sku_id' => $product->product_sku_id,
                 'monthly_capacity_kg' => $product->monthly_capacity_kg !== null ? (string) $product->monthly_capacity_kg : null,
                 'minimum_order_kg' => $product->minimum_order_kg !== null ? (string) $product->minimum_order_kg : null,
+                'lead_time_days' => $product->lead_time_days !== null ? (string) $product->lead_time_days : null,
+                'packaging_type' => $this->normalizeNullableString($product->packaging_type),
+                'is_active' => (bool) ($product->is_active ?? false),
+                'notes' => $this->normalizeNullableString($product->notes),
             ])
             ->values()
             ->all();
@@ -653,9 +694,14 @@ class SupplierController extends Controller
     {
         return collect($productRows)
             ->map(fn (array $productRow) => [
-                'product_name' => $productRow['product_name'],
+                'product_id' => $productRow['product_id'] ?: null,
+                'product_sku_id' => $productRow['product_sku_id'] ?: null,
                 'monthly_capacity_kg' => $productRow['monthly_capacity_kg'] !== null ? (string) $productRow['monthly_capacity_kg'] : null,
                 'minimum_order_kg' => $productRow['minimum_order_kg'] !== null ? (string) $productRow['minimum_order_kg'] : null,
+                'lead_time_days' => $productRow['lead_time_days'] !== null ? (string) $productRow['lead_time_days'] : null,
+                'packaging_type' => $this->normalizeNullableString($productRow['packaging_type'] ?? null),
+                'is_active' => (bool) ($productRow['is_active'] ?? false),
+                'notes' => $this->normalizeNullableString($productRow['notes'] ?? null),
             ])
             ->values()
             ->all();
@@ -675,11 +721,18 @@ class SupplierController extends Controller
     private function buildSupplierProductSummary(array $productRows): array
     {
         $rows = collect($productRows);
+        $products = Product::query()
+            ->whereIn('id', $rows->pluck('product_id')->filter()->all())
+            ->get(['id', 'product_name'])
+            ->keyBy('id');
         $capacities = $rows->pluck('monthly_capacity_kg')->filter(fn ($value) => $value !== null && $value !== '');
         $minimumOrders = $rows->pluck('minimum_order_kg')->filter(fn ($value) => $value !== null && $value !== '');
 
         return [
-            'products_summary' => $rows->pluck('product_name')->filter()->implode(', '),
+            'products_summary' => $rows
+                ->map(fn (array $row) => $products->get((int) $row['product_id'])?->product_name)
+                ->filter()
+                ->implode(', '),
             'monthly_capacity_kg' => $capacities->isNotEmpty()
                 ? $capacities->sum(fn ($value) => (float) $value)
                 : null,
@@ -687,5 +740,75 @@ class SupplierController extends Controller
                 ? $minimumOrders->min(fn ($value) => (float) $value)
                 : null,
         ];
+    }
+
+    private function productOptions(): Collection
+    {
+        return Product::query()
+            ->orderBy('product_name')
+            ->get(['id', 'product_name', 'product_code']);
+    }
+
+    private function productSkuMap(): array
+    {
+        return ProductSku::query()
+            ->where('is_active', true)
+            ->orderBy('variant_name')
+            ->get(['id', 'product_id', 'sku_code', 'variant_name', 'barcode_number'])
+            ->groupBy('product_id')
+            ->map(fn (Collection $skus) => $skus->map(function (ProductSku $sku) {
+                return [
+                    'id' => $sku->id,
+                    'label' => collect([$sku->variant_name, $sku->sku_code])->filter()->implode(' | '),
+                    'barcode_number' => $sku->barcode_number,
+                ];
+            })->values()->all())
+            ->all();
+    }
+
+    private function resolveLegacyProductId(?string $legacyName): ?int
+    {
+        $normalized = $this->normalizeProductKey($legacyName);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        $products = Product::query()
+            ->get(['id', 'product_name'])
+            ->mapWithKeys(fn (Product $product) => [$this->normalizeProductKey($product->product_name) => $product->id]);
+
+        if ($products->has($normalized)) {
+            return (int) $products->get($normalized);
+        }
+
+        $aliases = [
+            'clove stem' => 'clove',
+            'cinnamon cut' => 'cinnamon',
+            'cinnamon stick' => 'cinnamon',
+            'vanilla bean' => 'vanilla',
+            'vanilla beans' => 'vanilla',
+        ];
+
+        $alias = $aliases[$normalized] ?? null;
+
+        return $alias !== null && $products->has($alias)
+            ? (int) $products->get($alias)
+            : null;
+    }
+
+    private function normalizeProductKey(?string $value): string
+    {
+        $normalized = strtolower(trim((string) $value));
+        $normalized = preg_replace('/[^a-z0-9]+/', ' ', $normalized) ?? '';
+
+        return trim($normalized);
+    }
+
+    private function normalizeNullableString(mixed $value): ?string
+    {
+        $normalized = trim((string) $value);
+
+        return $normalized !== '' ? $normalized : null;
     }
 }

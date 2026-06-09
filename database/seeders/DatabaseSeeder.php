@@ -17,9 +17,7 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             UserSeeder::class,
             ArkipelaParameterSeeder::class,
-            SupplierSeeder::class,
-            ClientSeeder::class,
-            OrderSeeder::class,
+            ProductSeeder::class,
         ]);
     }
 }

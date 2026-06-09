@@ -59,7 +59,11 @@ class OrderDocumentService
                 'line_number' => $index + 1,
                 'item_code' => $item->item_code,
                 'supplier_name' => $item->supplier?->supplier_name,
+                'product_id' => $item->product_id,
+                'product_sku_id' => $item->product_sku_id,
                 'product_name' => $item->product_name,
+                'variant_name' => $item->variant_name,
+                'barcode_number' => $item->barcode_number,
                 'hs_code' => $item->hs_code,
                 'specification' => $item->specification,
                 'quantity_kg' => (float) $item->quantity_kg,
@@ -94,7 +98,7 @@ class OrderDocumentService
             'document_number' => $documentNumber,
             'generated_at' => $generatedAt->toIso8601String(),
             'seller' => [
-                'company_name' => config('app.name', 'Archipela Web'),
+                'company_name' => config('app.name', 'ArkipelaSpice Web'),
                 'country' => 'Indonesia',
             ],
             'buyer' => [
@@ -127,6 +131,8 @@ class OrderDocumentService
                     'line_number' => $item['line_number'],
                     'item_code' => $item['item_code'],
                     'product_name' => $item['product_name'],
+                    'variant_name' => $item['variant_name'],
+                    'barcode_number' => $item['barcode_number'],
                     'supplier_name' => $item['supplier_name'],
                     'photos' => $item['product_photos'],
                 ])

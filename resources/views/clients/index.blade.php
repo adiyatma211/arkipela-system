@@ -122,7 +122,7 @@
                                     @empty
                                         <tr>
                                             <td colspan="9" class="text-center text-muted py-5">
-                                                Belum ada client. Tambahkan buyer pertama untuk mulai mengisi pipeline CRM Archipela.
+                                                Belum ada client. Tambahkan buyer pertama untuk mulai mengisi pipeline CRM ArkipelaSpice.
                                             </td>
                                         </tr>
                                     @endforelse

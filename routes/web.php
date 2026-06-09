@@ -5,6 +5,9 @@ use App\Http\Controllers\ArkipelaParameterController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductPackagingController;
+use App\Http\Controllers\ProductSkuController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RolePermissionController;
 use App\Http\Controllers\SupplierController;
@@ -132,6 +135,90 @@ Route::middleware('auth')->group(function (): void {
         Route::delete('/{supplier}', 'destroy')
             ->middleware('permission:' . UserPermission::SUPPLIERS_MANAGE->value)
             ->name('destroy');
+    });
+
+    Route::controller(ProductController::class)->prefix('products')->name('products.')->group(function (): void {
+        Route::get('/', 'index')
+            ->middleware('permission:' . implode(',', [
+                UserPermission::PRODUCTS_VIEW->value,
+                UserPermission::PRODUCTS_MANAGE->value,
+            ]))
+            ->name('index');
+        Route::get('/create', 'create')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('create');
+        Route::post('/', 'store')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('store');
+        Route::get('/{product}', 'show')
+            ->middleware('permission:' . implode(',', [
+                UserPermission::PRODUCTS_VIEW->value,
+                UserPermission::PRODUCTS_MANAGE->value,
+            ]))
+            ->name('show');
+        Route::get('/{product}/edit', 'edit')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('edit');
+        Route::put('/{product}', 'update')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('update');
+        Route::delete('/{product}', 'destroy')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('destroy');
+    });
+
+    Route::controller(ProductSkuController::class)->group(function (): void {
+        Route::get('/products/{product}/skus', 'index')
+            ->middleware('permission:' . implode(',', [
+                UserPermission::PRODUCTS_VIEW->value,
+                UserPermission::PRODUCTS_MANAGE->value,
+            ]))
+            ->name('products.skus.index');
+        Route::get('/products/{product}/skus/create', 'create')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('products.skus.create');
+        Route::post('/products/{product}/skus', 'store')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('products.skus.store');
+        Route::get('/product-skus/{productSku}', 'show')
+            ->middleware('permission:' . implode(',', [
+                UserPermission::PRODUCTS_VIEW->value,
+                UserPermission::PRODUCTS_MANAGE->value,
+            ]))
+            ->name('product-skus.show');
+        Route::get('/product-skus/{productSku}/edit', 'edit')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('product-skus.edit');
+        Route::put('/product-skus/{productSku}', 'update')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('product-skus.update');
+        Route::delete('/product-skus/{productSku}', 'destroy')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('product-skus.destroy');
+    });
+
+    Route::controller(ProductPackagingController::class)->group(function (): void {
+        Route::get('/product-skus/{productSku}/packagings', 'index')
+            ->middleware('permission:' . implode(',', [
+                UserPermission::PRODUCTS_VIEW->value,
+                UserPermission::PRODUCTS_MANAGE->value,
+            ]))
+            ->name('product-skus.packagings.index');
+        Route::get('/product-skus/{productSku}/packagings/create', 'create')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('product-skus.packagings.create');
+        Route::post('/product-skus/{productSku}/packagings', 'store')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('product-skus.packagings.store');
+        Route::get('/product-packagings/{productPackaging}/edit', 'edit')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('product-packagings.edit');
+        Route::put('/product-packagings/{productPackaging}', 'update')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('product-packagings.update');
+        Route::delete('/product-packagings/{productPackaging}', 'destroy')
+            ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
+            ->name('product-packagings.destroy');
     });
 
     Route::controller(ClientController::class)->prefix('clients')->name('clients.')->group(function (): void {

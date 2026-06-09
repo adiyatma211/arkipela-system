@@ -4,9 +4,14 @@
 @endif
 @php
     $productRows = old('products', $productRows ?? [[
-        'product_name' => '',
+        'product_id' => null,
+        'product_sku_id' => null,
         'monthly_capacity_kg' => null,
         'minimum_order_kg' => null,
+        'lead_time_days' => null,
+        'packaging_type' => '',
+        'is_active' => true,
+        'notes' => '',
     ]]);
     $photoRows = old('photos', []);
     $nextPhotoIndex = $photoRows !== []
@@ -15,6 +20,8 @@
     $existingPhotos = $supplier->relationLoaded('photos')
         ? $supplier->photos
         : collect();
+    $productOptions = collect($productOptions ?? []);
+    $productSkuMap = $productSkuMap ?? [];
 @endphp
 
 <div class="row">
@@ -129,27 +136,86 @@
     <div class="col-12">
         <div class="mb-3">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                <label class="form-label mb-0">Supplier Products</label>
+                <label class="form-label mb-0">Supplier Catalog</label>
                 <button type="button" class="btn btn-sm btn-light-primary" data-product-add>Add Product</button>
             </div>
             <div class="border rounded-3 p-3">
                 <div id="supplier-products-wrapper" data-next-index="{{ count($productRows) }}">
                     @foreach ($productRows as $index => $productRow)
+                        @php
+                            $selectedProductId = (string) data_get($productRow, 'product_id');
+                            $selectedSkuId = (string) data_get($productRow, 'product_sku_id');
+                            $skuOptions = collect($productSkuMap[$selectedProductId] ?? []);
+                        @endphp
                         <div class="border rounded-3 p-3 mb-3 supplier-product-row" data-product-row>
-                            <div class="row g-3 align-items-end">
-                                <div class="col-12 col-lg-5">
-                                    <label class="form-label">Product Name</label>
-                                    <input
-                                        type="text"
-                                        name="products[{{ $index }}][product_name]"
-                                        class="form-control @error("products.$index.product_name") is-invalid @enderror"
-                                        value="{{ data_get($productRow, 'product_name') }}"
-                                        placeholder="Example: Clove"
+                            <div class="row g-3">
+                                <div class="col-12 col-xl-4">
+                                    <label class="form-label">Product Master</label>
+                                    <select
+                                        name="products[{{ $index }}][product_id]"
+                                        class="form-select js-product-master-select @error("products.$index.product_id") is-invalid @enderror"
                                         required
                                     >
-                                    @error("products.$index.product_name")<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                        <option value="">Select product</option>
+                                        @foreach ($productOptions as $productOption)
+                                            <option value="{{ $productOption->id }}" @selected($selectedProductId === (string) $productOption->id)>
+                                                {{ $productOption->product_name }} ({{ $productOption->product_code }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error("products.$index.product_id")<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
-                                <div class="col-12 col-lg-3">
+                                <div class="col-12 col-xl-4">
+                                    <label class="form-label">SKU / Variant</label>
+                                    <select
+                                        name="products[{{ $index }}][product_sku_id]"
+                                        class="form-select js-product-sku-select @error("products.$index.product_sku_id") is-invalid @enderror"
+                                        data-selected-sku="{{ $selectedSkuId }}"
+                                        @disabled($selectedProductId === '')
+                                    >
+                                        <option value="">{{ $selectedProductId !== '' ? 'Optional SKU linkage' : 'Select product first' }}</option>
+                                        @foreach ($skuOptions as $skuOption)
+                                            <option value="{{ $skuOption['id'] }}" @selected($selectedSkuId === (string) $skuOption['id'])>
+                                                {{ $skuOption['label'] }}
+                                                @if (! empty($skuOption['barcode_number']))
+                                                    | {{ $skuOption['barcode_number'] }}
+                                                @endif
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error("products.$index.product_sku_id")<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-12 col-xl-2">
+                                    <label class="form-label">Lead Time (days)</label>
+                                    <input
+                                        type="number"
+                                        step="1"
+                                        min="0"
+                                        name="products[{{ $index }}][lead_time_days]"
+                                        class="form-control @error("products.$index.lead_time_days") is-invalid @enderror"
+                                        value="{{ data_get($productRow, 'lead_time_days') }}"
+                                    >
+                                    @error("products.$index.lead_time_days")<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-12 col-xl-2">
+                                    <label class="form-label">Status</label>
+                                    <div class="form-check form-switch border rounded-3 px-3 py-2">
+                                        <input
+                                            type="hidden"
+                                            name="products[{{ $index }}][is_active]"
+                                            value="0"
+                                        >
+                                        <input
+                                            type="checkbox"
+                                            name="products[{{ $index }}][is_active]"
+                                            value="1"
+                                            class="form-check-input"
+                                            @checked(filter_var(data_get($productRow, 'is_active', true), FILTER_VALIDATE_BOOL))
+                                        >
+                                        <label class="form-check-label ms-2">Active</label>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-xl-3">
                                     <label class="form-label">Monthly Capacity (kg)</label>
                                     <input
                                         type="number"
@@ -161,7 +227,7 @@
                                     >
                                     @error("products.$index.monthly_capacity_kg")<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
-                                <div class="col-12 col-lg-3">
+                                <div class="col-12 col-xl-3">
                                     <label class="form-label">Minimum Order (kg)</label>
                                     <input
                                         type="number"
@@ -173,8 +239,30 @@
                                     >
                                     @error("products.$index.minimum_order_kg")<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
-                                <div class="col-12 col-lg-1">
+                                <div class="col-12 col-xl-3">
+                                    <label class="form-label">Packaging Type</label>
+                                    <input
+                                        type="text"
+                                        name="products[{{ $index }}][packaging_type]"
+                                        class="form-control @error("products.$index.packaging_type") is-invalid @enderror"
+                                        value="{{ data_get($productRow, 'packaging_type') }}"
+                                        placeholder="Box, Jar, Bulk Bag"
+                                    >
+                                    @error("products.$index.packaging_type")<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-12 col-xl-2">
+                                    <label class="form-label">Action</label>
                                     <button type="button" class="btn btn-light-danger w-100" data-product-remove>Remove</button>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Notes</label>
+                                    <textarea
+                                        name="products[{{ $index }}][notes]"
+                                        rows="2"
+                                        class="form-control @error("products.$index.notes") is-invalid @enderror"
+                                        placeholder="Catalog remark, MOQ note, preferred packaging, or retail readiness note"
+                                    >{{ data_get($productRow, 'notes') }}</textarea>
+                                    @error("products.$index.notes")<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
                             </div>
                         </div>
@@ -182,7 +270,7 @@
                 </div>
                 @error('products')<div class="text-danger small">{{ $message }}</div>@enderror
                 <div class="form-text mt-2">
-                    Satu supplier bisa punya beberapa product, dan setiap product punya capacity serta minimum order sendiri.
+                    Supplier sekarang link ke product master. SKU bersifat optional jika supplier hanya support product level, belum sampai varian retail tertentu.
                 </div>
             </div>
         </div>
@@ -307,21 +395,53 @@
 
 <template id="supplier-product-template">
     <div class="border rounded-3 p-3 mb-3 supplier-product-row" data-product-row>
-        <div class="row g-3 align-items-end">
-            <div class="col-12 col-lg-5">
-                <label class="form-label">Product Name</label>
-                <input type="text" name="products[__INDEX__][product_name]" class="form-control" placeholder="Example: Clove" required>
+        <div class="row g-3">
+            <div class="col-12 col-xl-4">
+                <label class="form-label">Product Master</label>
+                <select name="products[__INDEX__][product_id]" class="form-select js-product-master-select" required>
+                    <option value="">Select product</option>
+                    @foreach ($productOptions as $productOption)
+                        <option value="{{ $productOption->id }}">{{ $productOption->product_name }} ({{ $productOption->product_code }})</option>
+                    @endforeach
+                </select>
             </div>
-            <div class="col-12 col-lg-3">
+            <div class="col-12 col-xl-4">
+                <label class="form-label">SKU / Variant</label>
+                <select name="products[__INDEX__][product_sku_id]" class="form-select js-product-sku-select" disabled>
+                    <option value="">Select product first</option>
+                </select>
+            </div>
+            <div class="col-12 col-xl-2">
+                <label class="form-label">Lead Time (days)</label>
+                <input type="number" step="1" min="0" name="products[__INDEX__][lead_time_days]" class="form-control">
+            </div>
+            <div class="col-12 col-xl-2">
+                <label class="form-label">Status</label>
+                <div class="form-check form-switch border rounded-3 px-3 py-2">
+                    <input type="hidden" name="products[__INDEX__][is_active]" value="0">
+                    <input type="checkbox" name="products[__INDEX__][is_active]" value="1" class="form-check-input" checked>
+                    <label class="form-check-label ms-2">Active</label>
+                </div>
+            </div>
+            <div class="col-12 col-xl-3">
                 <label class="form-label">Monthly Capacity (kg)</label>
                 <input type="number" step="0.01" min="0" name="products[__INDEX__][monthly_capacity_kg]" class="form-control">
             </div>
-            <div class="col-12 col-lg-3">
+            <div class="col-12 col-xl-3">
                 <label class="form-label">Minimum Order (kg)</label>
                 <input type="number" step="0.01" min="0" name="products[__INDEX__][minimum_order_kg]" class="form-control">
             </div>
-            <div class="col-12 col-lg-1">
+            <div class="col-12 col-xl-3">
+                <label class="form-label">Packaging Type</label>
+                <input type="text" name="products[__INDEX__][packaging_type]" class="form-control" placeholder="Box, Jar, Bulk Bag">
+            </div>
+            <div class="col-12 col-xl-2">
+                <label class="form-label">Action</label>
                 <button type="button" class="btn btn-light-danger w-100" data-product-remove>Remove</button>
+            </div>
+            <div class="col-12">
+                <label class="form-label">Notes</label>
+                <textarea name="products[__INDEX__][notes]" rows="2" class="form-control" placeholder="Catalog remark, MOQ note, preferred packaging, or retail readiness note"></textarea>
             </div>
         </div>
     </div>
@@ -359,6 +479,41 @@
 @push('scripts')
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            const productSkuMap = @json($productSkuMap);
+
+            const buildSkuOptions = function (productId, selectedSkuId = '') {
+                const skuOptions = productSkuMap[String(productId || '')] || [];
+
+                if (!skuOptions.length) {
+                    return `<option value="">${productId ? 'No SKU linked' : 'Select product first'}</option>`;
+                }
+
+                const selectedValue = String(selectedSkuId || '');
+
+                return '<option value="">Optional SKU linkage</option>' + skuOptions.map(function (skuOption) {
+                    const selected = String(skuOption.id) === selectedValue ? ' selected' : '';
+                    const barcode = skuOption.barcode_number ? ` | ${skuOption.barcode_number}` : '';
+                    return `<option value="${skuOption.id}"${selected}>${skuOption.label}${barcode}</option>`;
+                }).join('');
+            };
+
+            const syncSkuSelect = function (row, selectedSkuId = '') {
+                const productSelect = row.querySelector('.js-product-master-select');
+                const skuSelect = row.querySelector('.js-product-sku-select');
+
+                if (!productSelect || !skuSelect) {
+                    return;
+                }
+
+                const productId = productSelect.value;
+                skuSelect.innerHTML = buildSkuOptions(productId, selectedSkuId);
+                skuSelect.disabled = !productId;
+
+                if (selectedSkuId) {
+                    skuSelect.value = String(selectedSkuId);
+                }
+            };
+
             const setupDynamicRows = function (options) {
                 const wrapper = document.getElementById(options.wrapperId);
                 const template = document.getElementById(options.templateId);
@@ -388,6 +543,12 @@
                     const index = Number(wrapper.dataset.nextIndex || 0);
                     wrapper.insertAdjacentHTML('beforeend', createRow(index));
                     wrapper.dataset.nextIndex = String(index + 1);
+
+                    if (options.wrapperId === 'supplier-products-wrapper') {
+                        const rows = wrapper.querySelectorAll('[data-product-row]');
+                        const latestRow = rows[rows.length - 1];
+                        syncSkuSelect(latestRow);
+                    }
                 });
 
                 wrapper.addEventListener('click', function (event) {
@@ -401,6 +562,17 @@
                     ensureMinimumRows();
                 });
             };
+
+            document.querySelectorAll('[data-product-row]').forEach(function (row) {
+                const skuSelect = row.querySelector('.js-product-sku-select');
+                syncSkuSelect(row, skuSelect?.dataset.selectedSku || skuSelect?.value || '');
+            });
+
+            document.addEventListener('change', function (event) {
+                if (event.target.matches('.js-product-master-select')) {
+                    syncSkuSelect(event.target.closest('[data-product-row]'));
+                }
+            });
 
             setupDynamicRows({
                 wrapperId: 'supplier-products-wrapper',

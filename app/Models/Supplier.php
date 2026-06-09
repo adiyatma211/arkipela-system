@@ -80,6 +80,7 @@ class Supplier extends Model
     public function products(): HasMany
     {
         return $this->hasMany(SupplierProduct::class)
+            ->with(['product', 'productSku'])
             ->orderBy('sort_order')
             ->orderBy('id');
     }
@@ -111,6 +112,7 @@ class Supplier extends Model
                 'product_name' => $name,
                 'monthly_capacity_kg' => $index === 0 ? $this->monthly_capacity_kg : null,
                 'minimum_order_kg' => $index === 0 ? $this->minimum_order_kg : null,
+                'is_active' => true,
                 'sort_order' => $index,
             ]);
         });
@@ -119,7 +121,7 @@ class Supplier extends Model
     public function resolvedProductsSummary(): ?string
     {
         $summary = $this->resolvedProducts()
-            ->pluck('product_name')
+            ->map(fn (SupplierProduct $product) => $product->product_name)
             ->filter()
             ->implode(', ');
 

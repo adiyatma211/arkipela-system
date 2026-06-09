@@ -127,13 +127,13 @@
             <div id="auth-left">
                 <div class="auth-logo mb-4">
                     <a href="{{ route('login') }}" class="archipela-auth-logo">
-                        <img src="{{ asset('assetes/logo/logo.png') }}" alt="Archipela Logo" class="archipela-auth-logo-media">
-                        <span class="archipela-auth-logo-text">Archipela Web</span>
+                        <img src="{{ asset('assetes/logo/logo.png') }}" alt="Arkipela Logo" class="archipela-auth-logo-media">
+                        <span class="archipela-auth-logo-text">Arkipela Web</span>
                     </a>
                 </div>
 
                 <h1 class="auth-title">Welcome back</h1>
-                <p class="auth-subtitle mb-5">Masuk untuk melanjutkan operasional internal Archipela.</p>
+                <p class="auth-subtitle mb-5">Masuk untuk melanjutkan operasional internal Arkipela.</p>
 
                 @if (session('status'))
                     <div class="alert alert-light-success color-success">{{ session('status') }}</div>
@@ -200,7 +200,7 @@
                         <span class="archipela-auth-pill">Export Operating System</span>
                         <h2>Kelola supplier, client, order, dan dashboard owner dari satu workspace.</h2>
                         <p>
-                            Fondasi MVP Archipela dirancang untuk membantu tim procurement, sales,
+                            Fondasi MVP Arkipela dirancang untuk membantu tim procurement, sales,
                             dan owner melihat progres operasional export dengan lebih cepat dan rapi.
                         </p>
 

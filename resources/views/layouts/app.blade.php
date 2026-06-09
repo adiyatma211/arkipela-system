@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ $pageTitle ?? 'Archipela Web' }} - Archipela Web</title>
+    <title>{{ $pageTitle ?? 'ArkipelaSpice' }} - ArkipelaSpice Web</title>
     <link rel="shortcut icon" href="{{ asset('assetes/logo/logo.png') }}" type="image/x-icon">
     <link rel="stylesheet" href="{{ asset('template/dist/assets/compiled/css/app.css') }}">
     <link rel="stylesheet" href="{{ asset('template/dist/assets/compiled/css/app-dark.css') }}">

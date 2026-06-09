@@ -11,6 +11,16 @@
             'permissions' => [\App\Enums\UserPermission::DASHBOARD_VIEW->value],
         ],
         [
+            'label' => 'Products',
+            'route' => 'products.index',
+            'match' => 'products.*',
+            'icon' => 'bi-box-seam-fill',
+            'permissions' => [
+                \App\Enums\UserPermission::PRODUCTS_VIEW->value,
+                \App\Enums\UserPermission::PRODUCTS_MANAGE->value,
+            ],
+        ],
+        [
             'label' => 'Suppliers',
             'route' => 'suppliers.index',
             'match' => 'suppliers.*',
@@ -311,10 +321,10 @@
         <div class="sidebar-header position-relative">
             <div class="archipela-sidebar-header-wrap">
                 <a href="{{ route($user?->homeRoute() ?? 'dashboard') }}" class="archipela-sidebar-brand">
-                    <img src="{{ asset('assetes/logo/logo.png') }}" alt="Archipela Logo"
+                    <img src="{{ asset('assetes/logo/logo.png') }}" alt="Arkipela Logo"
                         class="archipela-sidebar-brand__logo">
                     <div>
-                        <div class="archipela-sidebar-brand__title">Archipela Web</div>
+                        <div class="archipela-sidebar-brand__title">Arkipela Web</div>
                         <div class="archipela-sidebar-brand__subtitle">Export operating system</div>
                     </div>
                 </a>

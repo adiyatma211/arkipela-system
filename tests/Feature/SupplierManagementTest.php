@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Enums\ProductStatus;
 use App\Enums\SupplierApprovalStatus;
 use App\Enums\SupplierStatus;
 use App\Enums\SupplierType;
 use App\Enums\UserPermission;
 use App\Enums\UserRole;
 use App\Models\Permission;
+use App\Models\Product;
 use App\Models\Role;
 use App\Models\Supplier;
 use App\Models\SupplierPhoto;
@@ -24,6 +26,8 @@ class SupplierManagementTest extends TestCase
     public function test_procurement_supplier_creation_is_saved_as_pending_owner_approval(): void
     {
         $user = $this->createProcurementUser();
+        $clove = $this->createProduct('Clove', 'PRD-T001');
+        $nutmeg = $this->createProduct('Nutmeg', 'PRD-T002');
         Storage::fake('supplier-photos');
 
         $response = $this
@@ -44,12 +48,12 @@ class SupplierManagementTest extends TestCase
                 'notes' => 'Ready',
                 'products' => [
                     [
-                        'product_name' => 'Clove',
+                        'product_id' => $clove->id,
                         'monthly_capacity_kg' => 1200,
                         'minimum_order_kg' => 200,
                     ],
                     [
-                        'product_name' => 'Nutmeg',
+                        'product_id' => $nutmeg->id,
                         'monthly_capacity_kg' => 900,
                         'minimum_order_kg' => 150,
                     ],
@@ -85,6 +89,7 @@ class SupplierManagementTest extends TestCase
 
         $this->assertDatabaseHas('supplier_products', [
             'supplier_id' => $supplier->id,
+            'product_id' => $clove->id,
             'product_name' => 'Clove',
             'monthly_capacity_kg' => 1200,
             'minimum_order_kg' => 200,
@@ -93,6 +98,7 @@ class SupplierManagementTest extends TestCase
 
         $this->assertDatabaseHas('supplier_products', [
             'supplier_id' => $supplier->id,
+            'product_id' => $nutmeg->id,
             'product_name' => 'Nutmeg',
             'monthly_capacity_kg' => 900,
             'minimum_order_kg' => 150,
@@ -149,6 +155,9 @@ class SupplierManagementTest extends TestCase
     {
         $user = $this->createProcurementUser();
         $owner = $this->createOwnerUser();
+        $clove = $this->createProduct('Clove', 'PRD-T003');
+        $cinnamon = $this->createProduct('Cinnamon', 'PRD-T004');
+        $mace = $this->createProduct('Mace', 'PRD-T005');
         Storage::fake('supplier-photos');
 
         $supplier = Supplier::query()->create([
@@ -162,14 +171,15 @@ class SupplierManagementTest extends TestCase
             'submitted_at' => now()->subDay(),
             'approved_by' => $owner->id,
             'approved_at' => now()->subDay(),
-            'products_summary' => 'Old Product',
+            'products_summary' => 'Clove',
             'monthly_capacity_kg' => 500,
             'minimum_order_kg' => 100,
         ]);
 
         $supplier->products()->createMany([
             [
-                'product_name' => 'Old Product',
+                'product_id' => $clove->id,
+                'product_name' => 'Clove',
                 'monthly_capacity_kg' => 500,
                 'minimum_order_kg' => 100,
                 'sort_order' => 0,
@@ -206,12 +216,12 @@ class SupplierManagementTest extends TestCase
                 'notes' => 'Updated',
                 'products' => [
                     [
-                        'product_name' => 'Cinnamon',
+                        'product_id' => $cinnamon->id,
                         'monthly_capacity_kg' => 700,
                         'minimum_order_kg' => 120,
                     ],
                     [
-                        'product_name' => 'Mace',
+                        'product_id' => $mace->id,
                         'monthly_capacity_kg' => 300,
                         'minimum_order_kg' => 80,
                     ],
@@ -241,16 +251,18 @@ class SupplierManagementTest extends TestCase
 
         $this->assertDatabaseMissing('supplier_products', [
             'supplier_id' => $supplier->id,
-            'product_name' => 'Old Product',
+            'product_name' => 'Clove',
         ]);
 
         $this->assertDatabaseHas('supplier_products', [
             'supplier_id' => $supplier->id,
+            'product_id' => $cinnamon->id,
             'product_name' => 'Cinnamon',
         ]);
 
         $this->assertDatabaseHas('supplier_products', [
             'supplier_id' => $supplier->id,
+            'product_id' => $mace->id,
             'product_name' => 'Mace',
         ]);
 
@@ -306,6 +318,17 @@ class SupplierManagementTest extends TestCase
 
         return User::factory()->create([
             'role_id' => $role->id,
+        ]);
+    }
+
+    private function createProduct(string $name, string $code): Product
+    {
+        return Product::query()->create([
+            'product_code' => $code,
+            'product_name' => $name,
+            'category' => 'Spices',
+            'default_unit' => 'KG',
+            'status' => ProductStatus::ACTIVE->value,
         ]);
     }
 }

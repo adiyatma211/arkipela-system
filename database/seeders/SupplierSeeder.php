@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Enums\SupplierStatus;
 use App\Enums\SupplierType;
+use App\Models\Product;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -15,7 +16,10 @@ class SupplierSeeder extends Seeder
      */
     public function run(): void
     {
-        $ownerId = User::query()->where('email', 'owner@archipela.test')->value('id');
+        $ownerId = User::query()->where('email', 'owner@ArkipelaSpice.test')->value('id');
+        $productIds = Product::query()
+            ->get(['id', 'product_name'])
+            ->mapWithKeys(fn (Product $product) => [$this->normalizeProductKey($product->product_name) => $product->id]);
 
         $suppliers = [
             [
@@ -163,9 +167,42 @@ class SupplierSeeder extends Seeder
             $supplier->products()->createMany(
                 collect($entry['products'])
                     ->values()
-                    ->map(fn (array $product, int $index) => $product + ['sort_order' => $index])
+                    ->map(fn (array $product, int $index) => $product + [
+                        'product_id' => $this->resolveProductId($product['product_name'], $productIds),
+                        'sort_order' => $index,
+                    ])
                     ->all()
             );
         }
+    }
+
+    private function resolveProductId(string $productName, \Illuminate\Support\Collection $productIds): ?int
+    {
+        $normalized = $this->normalizeProductKey($productName);
+
+        if ($productIds->has($normalized)) {
+            return (int) $productIds->get($normalized);
+        }
+
+        $aliases = [
+            'cinnamon cut' => 'cinnamon',
+            'cinnamon stick' => 'cinnamon',
+            'clove stem' => 'clove',
+            'vanilla bean' => 'vanilla',
+        ];
+
+        $alias = $aliases[$normalized] ?? null;
+
+        return $alias !== null && $productIds->has($alias)
+            ? (int) $productIds->get($alias)
+            : null;
+    }
+
+    private function normalizeProductKey(string $value): string
+    {
+        $normalized = strtolower(trim($value));
+        $normalized = preg_replace('/[^a-z0-9]+/', ' ', $normalized) ?? '';
+
+        return trim($normalized);
     }
 }

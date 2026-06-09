@@ -141,17 +141,14 @@ The database seeding currently includes:
 - `RolePermissionSeeder`
 - `UserSeeder`
 - `ArkipelaParameterSeeder`
-- `SupplierSeeder`
-- `ClientSeeder`
-- `OrderSeeder`
 
 Useful manual commands:
 
 ```bash
 php artisan db:seed --class=ArkipelaParameterSeeder
-php artisan db:seed --class=OrderSeeder
 php artisan db:seed --class=PermissionSeeder
 php artisan db:seed --class=RolePermissionSeeder
+php artisan db:seed --class=UserSeeder
 ```
 
 ## Demo Accounts
@@ -203,7 +200,6 @@ Recent work already added:
 - reports submenu structure
 - internal order report with detailed owner-facing columns
 - report exports to HTML and Excel
-- richer order seeder data
 - commercial invoice and packing list preview improvements
 - order item packaging parameterization
 

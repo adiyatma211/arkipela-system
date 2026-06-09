@@ -19,13 +19,63 @@
     }
     $supplierProductMap = collect($suppliers)
         ->mapWithKeys(function ($supplier) {
+            $catalogProducts = $supplier->resolvedProducts()
+                ->filter(fn ($product) => filled($product->product_id));
+
             return [
-                (string) $supplier->id => $supplier->resolvedProducts()
-                    ->pluck('product_name')
+                (string) $supplier->id => $catalogProducts
+                    ->groupBy('product_id')
+                    ->map(function ($productRows, $productId) {
+                        $firstRow = $productRows->first();
+
+                        return [
+                            'id' => (int) $productId,
+                            'label' => $firstRow?->product_name ?? 'Unknown Product',
+                        ];
+                    })
                     ->filter()
                     ->values()
                     ->all(),
             ];
+        })
+        ->all();
+    $supplierProductSkuMap = collect($suppliers)
+        ->mapWithKeys(function ($supplier) {
+            $skuMap = $supplier->resolvedProducts()
+                ->filter(fn ($product) => filled($product->product_id))
+                ->groupBy('product_id')
+                ->map(function ($productRows) {
+                    $specificSkus = $productRows
+                        ->filter(fn ($productRow) => $productRow->productSku)
+                        ->map(function ($productRow) {
+                            return [
+                                'id' => $productRow->productSku->id,
+                                'label' => collect([$productRow->productSku->variant_name, $productRow->productSku->sku_code])->filter()->implode(' | '),
+                                'barcode_number' => $productRow->productSku->barcode_number,
+                            ];
+                        })
+                        ->unique('id')
+                        ->values();
+
+                    if ($specificSkus->isNotEmpty()) {
+                        return $specificSkus->all();
+                    }
+
+                    $masterSkus = optional($productRows->first()?->product)->skus ?? collect();
+
+                    return $masterSkus
+                        ->filter(fn ($sku) => $sku->is_active)
+                        ->map(fn ($sku) => [
+                            'id' => $sku->id,
+                            'label' => collect([$sku->variant_name, $sku->sku_code])->filter()->implode(' | '),
+                            'barcode_number' => $sku->barcode_number,
+                        ])
+                        ->values()
+                        ->all();
+                })
+                ->all();
+
+            return [(string) $supplier->id => $skuMap];
         })
         ->all();
     $supplierOptionsData = collect($suppliers)
@@ -44,8 +94,9 @@
     if (empty($items)) {
         $items = [[
             'supplier_id' => null,
+            'product_id' => null,
+            'product_sku_id' => null,
             'item_code' => '',
-            'product_name' => '',
             'hs_code' => '',
             'specification' => '',
             'quantity_kg' => null,
@@ -296,14 +347,19 @@
                     @foreach ($items as $index => $item)
                         @php
                             $selectedSupplierId = (string) data_get($item, 'supplier_id');
-                            $selectedProductName = data_get($item, 'product_name');
+                            $selectedProductId = (string) data_get($item, 'product_id');
+                            $selectedProductSkuId = (string) data_get($item, 'product_sku_id');
                             $productOptions = $supplierProductMap[$selectedSupplierId] ?? [];
+                            $skuOptions = data_get($supplierProductSkuMap, "{$selectedSupplierId}.{$selectedProductId}", []);
                             $itemQuantityUnitOptions = $ensureOption($quantityUnitOptions, data_get($item, 'quantity_unit', 'PCS'));
                             $itemDimensionUnitOptions = $ensureOption($dimensionUnitOptions, data_get($item, 'dimension_unit', 'CM'));
                             $itemPackagingTypeOptions = $ensureOption($packagingTypeOptions, data_get($item, 'package_type'));
                             $itemOuterPackagingTypeOptions = $ensureOption($outerPackagingTypeOptions, data_get($item, 'outer_package_type'));
-                            if ($selectedProductName && ! in_array($selectedProductName, $productOptions, true)) {
-                                $productOptions[] = $selectedProductName;
+                            if ($selectedProductId !== '' && ! collect($productOptions)->contains(fn ($productOption) => (string) data_get($productOption, 'id') === $selectedProductId)) {
+                                $productOptions[] = [
+                                    'id' => (int) $selectedProductId,
+                                    'label' => data_get($item, 'product_name', 'Existing Product'),
+                                ];
                             }
                         @endphp
                         <tr class="order-item-row">
@@ -319,13 +375,26 @@
                                 </select>
                                 @error("items.$index.supplier_id")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                                 <label class="form-label small text-muted mb-1 mt-2">Product</label>
-                                <select name="items[{{ $index }}][product_name]" class="form-select js-product-select" data-selected-product="{{ $selectedProductName }}" @disabled($selectedSupplierId === '') required>
+                                <select name="items[{{ $index }}][product_id]" class="form-select js-product-select" data-selected-product="{{ $selectedProductId }}" @disabled($selectedSupplierId === '') required>
                                     <option value="">{{ $selectedSupplierId !== '' ? 'Select product' : 'Select supplier first' }}</option>
                                     @foreach ($productOptions as $productOption)
-                                        <option value="{{ $productOption }}" @selected($selectedProductName === $productOption)>{{ $productOption }}</option>
+                                        <option value="{{ $productOption['id'] }}" @selected($selectedProductId === (string) $productOption['id'])>{{ $productOption['label'] }}</option>
                                     @endforeach
                                 </select>
-                                @error("items.$index.product_name")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                @error("items.$index.product_id")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                                <label class="form-label small text-muted mb-1 mt-2">SKU / Variant</label>
+                                <select name="items[{{ $index }}][product_sku_id]" class="form-select js-product-sku-select" data-selected-sku="{{ $selectedProductSkuId }}" @disabled($selectedProductId === '')>
+                                    <option value="">{{ $selectedProductId !== '' ? 'Optional SKU linkage' : 'Select product first' }}</option>
+                                    @foreach ($skuOptions as $skuOption)
+                                        <option value="{{ $skuOption['id'] }}" @selected($selectedProductSkuId === (string) $skuOption['id'])>
+                                            {{ $skuOption['label'] }}
+                                            @if (! empty($skuOption['barcode_number']))
+                                                | {{ $skuOption['barcode_number'] }}
+                                            @endif
+                                        </option>
+                                    @endforeach
+                                </select>
+                                @error("items.$index.product_sku_id")<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                             </td>
                             <td data-cell-label="Item Identity">
                                 <div class="row g-2">
@@ -593,6 +662,7 @@
                 collect($supplierOptionsData)->map(fn ($supplierOption) => '<option value="' . $supplierOption['id'] . '">' . e($supplierOption['label'] . ' - ' . $supplierOption['meta']) . '</option>')->implode('')
             );
             const supplierProductsMap = @json($supplierProductMap);
+            const supplierProductSkusMap = @json($supplierProductSkuMap);
             const quantityUnitOptionsHtml = @json(
                 $quantityUnitOptions->map(fn ($option) => '<option value="' . e($option['value']) . '">' . e($option['label']) . '</option>')->implode('')
             );
@@ -709,20 +779,45 @@
                 const selectedValue = String(selectedProduct || '');
 
                 if (products.length === 0 && selectedValue) {
-                    return `<option value="">Select product</option><option value="${escapeHtml(selectedValue)}" selected>${escapeHtml(selectedValue)}</option>`;
+                    return `<option value="">Select product</option><option value="${escapeHtml(selectedValue)}" selected>Existing Product</option>`;
                 }
 
                 if (products.length === 0) {
                     return `<option value="">${normalizedSupplierId ? 'No product available' : 'Select supplier first'}</option>`;
                 }
 
-                const fallbackProducts = selectedValue && !products.includes(selectedValue)
-                    ? [...products, selectedValue]
+                const fallbackProducts = selectedValue && !products.some((product) => String(product.id) === selectedValue)
+                    ? [...products, { id: selectedValue, label: 'Existing Product' }]
                     : products;
 
                 return '<option value="">Select product</option>' + fallbackProducts.map((product) => {
-                    const isSelected = product === selectedValue ? ' selected' : '';
-                    return `<option value="${escapeHtml(product)}"${isSelected}>${escapeHtml(product)}</option>`;
+                    const isSelected = String(product.id) === selectedValue ? ' selected' : '';
+                    return `<option value="${escapeHtml(product.id)}"${isSelected}>${escapeHtml(product.label)}</option>`;
+                }).join('');
+            };
+
+            const buildSkuOptionsHtml = (supplierId, productId, selectedSku = '') => {
+                const normalizedSupplierId = String(supplierId || '');
+                const normalizedProductId = String(productId || '');
+                const skus = supplierProductSkusMap[normalizedSupplierId]?.[normalizedProductId] || [];
+                const selectedValue = String(selectedSku || '');
+
+                if (skus.length === 0 && selectedValue) {
+                    return `<option value="">Optional SKU linkage</option><option value="${escapeHtml(selectedValue)}" selected>Existing SKU</option>`;
+                }
+
+                if (skus.length === 0) {
+                    return `<option value="">${normalizedProductId ? 'No SKU available' : 'Select product first'}</option>`;
+                }
+
+                const fallbackSkus = selectedValue && !skus.some((sku) => String(sku.id) === selectedValue)
+                    ? [...skus, { id: selectedValue, label: 'Existing SKU', barcode_number: '' }]
+                    : skus;
+
+                return '<option value="">Optional SKU linkage</option>' + fallbackSkus.map((sku) => {
+                    const isSelected = String(sku.id) === selectedValue ? ' selected' : '';
+                    const barcode = sku.barcode_number ? ` | ${escapeHtml(sku.barcode_number)}` : '';
+                    return `<option value="${escapeHtml(sku.id)}"${isSelected}>${escapeHtml(sku.label)}${barcode}</option>`;
                 }).join('');
             };
 
@@ -743,10 +838,31 @@
                 }
             };
 
+            const syncProductSkuSelect = (row, selectedSku = '') => {
+                const supplierSelect = row.querySelector('.js-supplier-select');
+                const productSelect = row.querySelector('.js-product-select');
+                const skuSelect = row.querySelector('.js-product-sku-select');
+
+                if (!supplierSelect || !productSelect || !skuSelect) {
+                    return;
+                }
+
+                const supplierId = supplierSelect.value;
+                const productId = productSelect.value;
+                skuSelect.innerHTML = buildSkuOptionsHtml(supplierId, productId, selectedSku);
+                skuSelect.disabled = !productId;
+
+                if (selectedSku) {
+                    skuSelect.value = selectedSku;
+                }
+            };
+
             const initializeProductSelects = () => {
                 [...tableBody.querySelectorAll('.order-item-row')].forEach((row) => {
                     const productSelect = row.querySelector('.js-product-select');
+                    const skuSelect = row.querySelector('.js-product-sku-select');
                     syncProductSelect(row, productSelect?.dataset.selectedProduct || productSelect?.value || '');
+                    syncProductSkuSelect(row, skuSelect?.dataset.selectedSku || skuSelect?.value || '');
                 });
             };
 
@@ -825,8 +941,12 @@
                         <label class="form-label small text-muted mb-1">Supplier</label>
                         <select name="items[${index}][supplier_id]" class="form-select js-supplier-select" required>${supplierOptionsHtml}</select>
                         <label class="form-label small text-muted mb-1 mt-2">Product</label>
-                        <select name="items[${index}][product_name]" class="form-select js-product-select" disabled required>
+                        <select name="items[${index}][product_id]" class="form-select js-product-select" disabled required>
                             <option value="">Select supplier first</option>
+                        </select>
+                        <label class="form-label small text-muted mb-1 mt-2">SKU / Variant</label>
+                        <select name="items[${index}][product_sku_id]" class="form-select js-product-sku-select" disabled>
+                            <option value="">Select product first</option>
                         </select>
                     </td>
                     <td data-cell-label="Item Identity">
@@ -935,6 +1055,7 @@
                 tableBody.appendChild(row);
                 bindNumericGuards(row);
                 syncProductSelect(row);
+                syncProductSkuSelect(row);
                 syncOrderItemsLayout();
                 refreshSummary();
             });
@@ -958,6 +1079,7 @@
                         }
                     });
                     syncProductSelect(removeButton.closest('.order-item-row'));
+                    syncProductSkuSelect(removeButton.closest('.order-item-row'));
                 } else {
                     removeButton.closest('.order-item-row').remove();
                     renumberRows();
@@ -969,6 +1091,11 @@
             tableBody.addEventListener('change', (event) => {
                 if (event.target.matches('.js-supplier-select')) {
                     syncProductSelect(event.target.closest('.order-item-row'));
+                    syncProductSkuSelect(event.target.closest('.order-item-row'));
+                }
+
+                if (event.target.matches('.js-product-select')) {
+                    syncProductSkuSelect(event.target.closest('.order-item-row'));
                 }
             });
 

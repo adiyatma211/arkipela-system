@@ -5,12 +5,14 @@ namespace Tests\Feature;
 use App\Enums\OrderDocumentStatus;
 use App\Enums\OrderDocumentType;
 use App\Enums\OrderStatus;
+use App\Enums\ProductStatus;
 use App\Enums\SupplierApprovalStatus;
 use App\Enums\SupplierStatus;
 use App\Enums\SupplierType;
 use App\Enums\UserRole;
 use App\Models\Client;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Role;
 use App\Models\Supplier;
 use App\Models\User;
@@ -24,7 +26,7 @@ class OrderDocumentManagementTest extends TestCase
     public function test_it_creates_mandatory_order_document_placeholders_when_order_is_stored(): void
     {
         $owner = $this->createOwnerUser();
-        [$client, $supplier] = $this->createClientAndSupplier($owner);
+        [$client, $supplier, $product] = $this->createClientAndSupplier($owner);
 
         $response = $this
             ->actingAs($owner)
@@ -44,7 +46,7 @@ class OrderDocumentManagementTest extends TestCase
                 'items' => [
                     [
                         'supplier_id' => $supplier->id,
-                        'product_name' => 'Clove',
+                        'product_id' => $product->id,
                         'specification' => 'Grade A',
                         'quantity_kg' => 1000,
                         'selling_price' => 12.5,
@@ -73,7 +75,7 @@ class OrderDocumentManagementTest extends TestCase
     public function test_order_detail_displays_mandatory_document_checklist(): void
     {
         $owner = $this->createOwnerUser();
-        [$client, $supplier] = $this->createClientAndSupplier($owner);
+        [$client, $supplier, $product] = $this->createClientAndSupplier($owner);
 
         $order = Order::query()->create([
             'order_code' => 'ORD-0001',
@@ -97,6 +99,7 @@ class OrderDocumentManagementTest extends TestCase
 
         $order->items()->create([
             'supplier_id' => $supplier->id,
+            'product_id' => $product->id,
             'product_name' => 'Clove',
             'specification' => 'Grade A',
             'quantity_kg' => 100,
@@ -132,9 +135,9 @@ class OrderDocumentManagementTest extends TestCase
     public function test_it_generates_commercial_invoice_snapshot_from_order(): void
     {
         $owner = $this->createOwnerUser();
-        [$client, $supplier] = $this->createClientAndSupplier($owner);
+        [$client, $supplier, $product] = $this->createClientAndSupplier($owner);
 
-        $order = $this->createOrderWithItems($owner, $client, $supplier);
+        $order = $this->createOrderWithItems($owner, $client, $supplier, $product);
         $document = $order->documents()->create([
             'document_type' => OrderDocumentType::COMMERCIAL_INVOICE->value,
             'status' => OrderDocumentStatus::DRAFT->value,
@@ -159,9 +162,9 @@ class OrderDocumentManagementTest extends TestCase
     public function test_it_previews_generated_packing_list_from_snapshot_payload(): void
     {
         $owner = $this->createOwnerUser();
-        [$client, $supplier] = $this->createClientAndSupplier($owner);
+        [$client, $supplier, $product] = $this->createClientAndSupplier($owner);
 
-        $order = $this->createOrderWithItems($owner, $client, $supplier);
+        $order = $this->createOrderWithItems($owner, $client, $supplier, $product);
         $document = $order->documents()->create([
             'document_type' => OrderDocumentType::PACKING_LIST->value,
             'document_number' => 'PL-2026-00001',
@@ -174,7 +177,7 @@ class OrderDocumentManagementTest extends TestCase
                 'document_number' => 'PL-2026-00001',
                 'generated_at' => now()->toIso8601String(),
                 'seller' => [
-                    'company_name' => 'Archipela Web',
+                    'company_name' => 'ArkipelaSpice Web',
                     'country' => 'Indonesia',
                 ],
                 'buyer' => [
@@ -229,10 +232,12 @@ class OrderDocumentManagementTest extends TestCase
     }
 
     /**
-     * @return array{0: Client, 1: Supplier}
+     * @return array{0: Client, 1: Supplier, 2: Product}
      */
     private function createClientAndSupplier(User $owner): array
     {
+        $product = $this->createProduct('Clove', 'PRD-T101');
+
         $client = Client::query()->create([
             'client_code' => 'CLI-0001',
             'company_name' => 'Tokyo Spice Import',
@@ -255,16 +260,17 @@ class OrderDocumentManagementTest extends TestCase
         ]);
 
         $supplier->products()->create([
+            'product_id' => $product->id,
             'product_name' => 'Clove',
             'monthly_capacity_kg' => 1000,
             'minimum_order_kg' => 100,
             'sort_order' => 0,
         ]);
 
-        return [$client, $supplier];
+        return [$client, $supplier, $product];
     }
 
-    private function createOrderWithItems(User $owner, Client $client, Supplier $supplier): Order
+    private function createOrderWithItems(User $owner, Client $client, Supplier $supplier, Product $product): Order
     {
         $order = Order::query()->create([
             'order_code' => 'ORD-0001',
@@ -292,6 +298,7 @@ class OrderDocumentManagementTest extends TestCase
 
         $order->items()->create([
             'supplier_id' => $supplier->id,
+            'product_id' => $product->id,
             'product_name' => 'Clove',
             'specification' => 'Grade A',
             'quantity_kg' => 100,
@@ -303,5 +310,16 @@ class OrderDocumentManagementTest extends TestCase
         ]);
 
         return $order;
+    }
+
+    private function createProduct(string $name, string $code): Product
+    {
+        return Product::query()->create([
+            'product_code' => $code,
+            'product_name' => $name,
+            'category' => 'Spices',
+            'default_unit' => 'KG',
+            'status' => ProductStatus::ACTIVE->value,
+        ]);
     }
 }

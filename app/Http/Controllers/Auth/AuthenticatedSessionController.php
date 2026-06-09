@@ -26,7 +26,7 @@ class AuthenticatedSessionController extends Controller
         ])->save();
 
         return redirect()->intended(route($request->user()?->homeRoute() ?? 'login'))
-            ->with('status', 'Welcome back to Archipela Web.');
+            ->with('status', 'Welcome back to ArkipelaSpice Web.');
     }
 
     public function destroy(): RedirectResponse

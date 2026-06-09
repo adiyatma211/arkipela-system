@@ -111,6 +111,12 @@
                                             <td>{{ $item->supplier?->supplier_name ?: '-' }}</td>
                                             <td>
                                                 <div class="fw-semibold">{{ $item->product_name }}</div>
+                                                @if ($item->variant_name)
+                                                    <div class="small text-muted">Variant: {{ $item->variant_name }}</div>
+                                                @endif
+                                                @if ($item->barcode_number)
+                                                    <div class="small text-muted">Barcode: {{ $item->barcode_number }}</div>
+                                                @endif
                                                 <div class="small text-muted">Code: {{ $item->item_code ?: '-' }}</div>
                                                 <div class="small text-muted">HS Code: {{ $item->hs_code ?: '-' }}</div>
                                                 <div class="small mt-1">{{ $item->specification ?: '-' }}</div>
@@ -128,6 +134,9 @@
                                                         / {{ $item->outer_package_type }}
                                                     @endif
                                                 </div>
+                                                @if ($item->packaging_summary)
+                                                    <div class="small text-muted mt-1">{{ $item->packaging_summary }}</div>
+                                                @endif
                                                 @if ($item->package_notes)
                                                     <div class="small mt-1">{{ $item->package_notes }}</div>
                                                 @endif

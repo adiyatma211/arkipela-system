@@ -138,7 +138,7 @@
                                     @empty
                                         <tr>
                                             <td colspan="10" class="text-center text-muted py-5">
-                                                Belum ada supplier. Tambahkan supplier pertama untuk mulai membangun database sourcing Archipela.
+                                                Belum ada supplier. Tambahkan supplier pertama untuk mulai membangun database sourcing ArkipelaSpice.
                                             </td>
                                         </tr>
                                     @endforelse

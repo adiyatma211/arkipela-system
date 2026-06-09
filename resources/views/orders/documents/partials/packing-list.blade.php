@@ -132,6 +132,12 @@
                             {{ data_get($item, 'item_code') ?: data_get($item, 'product_name', '-') }}
                         </div>
                         <div class="invoice-product-meta">{{ data_get($item, 'product_name', '-') }}</div>
+                        @if (filled(data_get($item, 'variant_name')))
+                            <div class="invoice-product-meta">Variant: {{ data_get($item, 'variant_name') }}</div>
+                        @endif
+                        @if (filled(data_get($item, 'barcode_number')))
+                            <div class="invoice-product-meta invoice-muted">Barcode: {{ data_get($item, 'barcode_number') }}</div>
+                        @endif
                         <div class="invoice-product-meta">{{ data_get($item, 'specification', '-') }}</div>
                         @if (filled(data_get($item, 'packaging_summary')))
                             <div class="invoice-product-meta invoice-muted">{{ data_get($item, 'packaging_summary') }}</div>
