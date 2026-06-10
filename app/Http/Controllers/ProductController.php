@@ -113,7 +113,7 @@ class ProductController extends Controller
         return view('products.show', [
             'pageTitle' => 'Product Detail',
             'pageSubtitle' => 'Ringkasan master commodity yang menjadi fondasi supplier mapping dan SKU retail.',
-            'product' => $product->load(['creator', 'skus']),
+            'product' => $product->load(['creator', 'skus.packagings']),
             'statusBadgeMap' => $this->statusBadgeMap(),
             'statusLabelMap' => $this->statusLabelMap(),
             'canManageProducts' => request()->user()?->hasPermission(UserPermission::PRODUCTS_MANAGE->value) ?? false,

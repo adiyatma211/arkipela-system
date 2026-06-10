@@ -186,6 +186,13 @@ Route::middleware('auth')->group(function (): void {
                 UserPermission::PRODUCTS_MANAGE->value,
             ]))
             ->name('product-skus.show');
+        Route::get('/product-skus/{productSku}/barcode/download/{format}', 'downloadBarcode')
+            ->whereIn('format', ['png', 'jpg', 'jpeg'])
+            ->middleware('permission:' . implode(',', [
+                UserPermission::PRODUCTS_VIEW->value,
+                UserPermission::PRODUCTS_MANAGE->value,
+            ]))
+            ->name('product-skus.barcode.download');
         Route::get('/product-skus/{productSku}/edit', 'edit')
             ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
             ->name('product-skus.edit');
@@ -213,6 +220,13 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/product-packagings/{productPackaging}/edit', 'edit')
             ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
             ->name('product-packagings.edit');
+        Route::get('/product-packagings/{productPackaging}/barcode/download/{format}', 'downloadBarcode')
+            ->whereIn('format', ['png', 'jpg', 'jpeg'])
+            ->middleware('permission:' . implode(',', [
+                UserPermission::PRODUCTS_VIEW->value,
+                UserPermission::PRODUCTS_MANAGE->value,
+            ]))
+            ->name('product-packagings.barcode.download');
         Route::put('/product-packagings/{productPackaging}', 'update')
             ->middleware('permission:' . UserPermission::PRODUCTS_MANAGE->value)
             ->name('product-packagings.update');

@@ -7,7 +7,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h4 class="mb-1">Add Product SKU</h4>
-                        <p class="text-muted mb-0">Buat varian baru untuk {{ $product->product_name }} dan simpan barcode retail-nya.</p>
+                        <p class="text-muted mb-0">Barcode retail dibuat di level SKU. Cukup pilih tipe barcode lalu isi satu nomor utama.</p>
                     </div>
                     <div class="card-body">
                         <form action="{{ $formAction }}" method="POST">

@@ -11,7 +11,9 @@ use App\Services\ActivityLogService;
 use App\Services\BarcodeAssetService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
+use RuntimeException;
 
 class ProductPackagingController extends Controller
 {
@@ -84,6 +86,22 @@ class ProductPackagingController extends Controller
             'submitLabel' => 'Update Packaging',
             'levelOptions' => $this->levelOptions(),
             'barcodeTypeOptions' => BarcodeType::options(),
+        ]);
+    }
+
+    public function downloadBarcode(ProductPackaging $productPackaging, string $format): Response|RedirectResponse
+    {
+        try {
+            $download = $this->barcodeAssetService->buildDownload($productPackaging, $format);
+        } catch (RuntimeException $exception) {
+            return redirect()
+                ->route('product-skus.packagings.index', $productPackaging->productSku)
+                ->with('error', $exception->getMessage());
+        }
+
+        return response($download['contents'], 200, [
+            'Content-Type' => $download['mime_type'],
+            'Content-Disposition' => 'attachment; filename="' . $download['filename'] . '"',
         ]);
     }
 

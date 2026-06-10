@@ -7,7 +7,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h4 class="mb-1">Edit Product SKU</h4>
-                        <p class="text-muted mb-0">Update data SKU {{ $productSku->sku_code }}.</p>
+                        <p class="text-muted mb-0">Perbarui SKU {{ $productSku->sku_code }} tanpa perlu isi ulang banyak field barcode yang tumpang tindih.</p>
                     </div>
                     <div class="card-body">
                         <form action="{{ $formAction }}" method="POST">

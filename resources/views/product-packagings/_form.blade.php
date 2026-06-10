@@ -32,47 +32,6 @@
             @error('units_per_pack')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
     </div>
-    <div class="col-12 col-lg-4">
-        <div class="mb-3">
-            <label for="barcode_type" class="form-label">Barcode Type</label>
-            <select id="barcode_type" name="barcode_type" class="form-select @error('barcode_type') is-invalid @enderror">
-                <option value="">Select barcode type</option>
-                @foreach (($barcodeTypeOptions ?? []) as $option)
-                    <option value="{{ $option['value'] }}" @selected(old('barcode_type', $productPackaging->barcode_type) === $option['value'])>{{ $option['label'] }}</option>
-                @endforeach
-            </select>
-            @error('barcode_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
-        </div>
-    </div>
-    <div class="col-12 col-lg-4">
-        <div class="mb-3">
-            <label for="barcode_number" class="form-label">Barcode Number</label>
-            <input type="text" id="barcode_number" name="barcode_number" class="form-control @error('barcode_number') is-invalid @enderror" value="{{ old('barcode_number', $productPackaging->barcode_number) }}">
-            @error('barcode_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
-        </div>
-    </div>
-
-    <div class="col-12 col-lg-4">
-        <div class="mb-3">
-            <label for="gtin" class="form-label">GTIN</label>
-            <input type="text" id="gtin" name="gtin" class="form-control @error('gtin') is-invalid @enderror" value="{{ old('gtin', $productPackaging->gtin) }}">
-            @error('gtin')<div class="invalid-feedback">{{ $message }}</div>@enderror
-        </div>
-    </div>
-    <div class="col-12 col-lg-4">
-        <div class="mb-3">
-            <label for="upc" class="form-label">UPC</label>
-            <input type="text" id="upc" name="upc" class="form-control @error('upc') is-invalid @enderror" value="{{ old('upc', $productPackaging->upc) }}">
-            @error('upc')<div class="invalid-feedback">{{ $message }}</div>@enderror
-        </div>
-    </div>
-    <div class="col-12 col-lg-4">
-        <div class="mb-3">
-            <label for="ean" class="form-label">EAN</label>
-            <input type="text" id="ean" name="ean" class="form-control @error('ean') is-invalid @enderror" value="{{ old('ean', $productPackaging->ean) }}">
-            @error('ean')<div class="invalid-feedback">{{ $message }}</div>@enderror
-        </div>
-    </div>
     <div class="col-12 col-lg-6">
         <div class="mb-3">
             <label class="form-label d-block">Default for Level</label>
@@ -135,14 +94,19 @@
             @error('notes')<div class="invalid-feedback">{{ $message }}</div>@enderror
         </div>
     </div>
-    <div class="col-12">
-        @include('products.partials.barcode-preview', [
-            'barcodeImageUrl' => $productPackaging->barcodeImageUrl(),
-            'barcodeType' => old('barcode_type', $productPackaging->barcode_type),
-            'barcodeValue' => old('barcode_number', $productPackaging->barcode_number),
-            'barcodeLabel' => 'Packaging Barcode Preview',
-        ])
-    </div>
+    @include('products.partials.barcode-fields', [
+        'fieldPrefix' => 'packaging',
+        'barcodeTypeOptions' => $barcodeTypeOptions ?? [],
+        'barcodeTypeValue' => old('barcode_type', $productPackaging->barcode_type),
+        'barcodeNumberValue' => old('barcode_number', $productPackaging->barcode_number),
+        'gtinValue' => old('gtin', $productPackaging->gtin),
+        'upcValue' => old('upc', $productPackaging->upc),
+        'eanValue' => old('ean', $productPackaging->ean),
+        'barcodeImageUrl' => $productPackaging->barcodeImageUrl(),
+        'barcodeLabel' => 'Packaging Barcode Preview',
+        'barcodeDownloadPngUrl' => $productPackaging->exists ? route('product-packagings.barcode.download', [$productPackaging, 'png']) : null,
+        'barcodeDownloadJpegUrl' => $productPackaging->exists ? route('product-packagings.barcode.download', [$productPackaging, 'jpeg']) : null,
+    ])
 </div>
 
 <div class="d-flex justify-content-end gap-2">

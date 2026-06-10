@@ -7,7 +7,7 @@
                 <div class="card">
                     <div class="card-header">
                         <h4 class="mb-1">Edit Packaging</h4>
-                        <p class="text-muted mb-0">Update packaging level {{ strtoupper($productPackaging->level) }} untuk SKU {{ $productSku->sku_code }}.</p>
+                        <p class="text-muted mb-0">Update packaging level {{ strtoupper($productPackaging->level) }} dengan flow barcode yang lebih ringkas.</p>
                     </div>
                     <div class="card-body">
                         <form action="{{ $formAction }}" method="POST">

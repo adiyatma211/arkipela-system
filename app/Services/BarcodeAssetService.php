@@ -7,6 +7,7 @@ use App\Models\ProductPackaging;
 use App\Models\ProductSku;
 use App\Support\RetailBarcodeFormatter;
 use Illuminate\Support\Facades\File;
+use RuntimeException;
 
 class BarcodeAssetService
 {
@@ -27,6 +28,35 @@ class BarcodeAssetService
         if ($path && File::exists(public_path($path))) {
             File::delete(public_path($path));
         }
+    }
+
+    public function buildDownload(ProductSku|ProductPackaging $record, string $format): array
+    {
+        $resolved = RetailBarcodeFormatter::resolveCanonicalBarcode(
+            barcodeType: $record->barcode_type,
+            barcodeNumber: $record->barcode_number,
+            upc: $record->upc,
+            ean: $record->ean,
+            gtin: $record->gtin,
+        );
+
+        if ($resolved['error'] || ! $resolved['barcode_number'] || ! RetailBarcodeFormatter::isPreviewSupported($resolved['barcode_type'])) {
+            throw new RuntimeException('Barcode preview is not available for this record.');
+        }
+
+        $normalizedFormat = strtolower($format);
+        $normalizedFormat = $normalizedFormat === 'jpg' ? 'jpeg' : $normalizedFormat;
+
+        if (! in_array($normalizedFormat, ['png', 'jpeg'], true)) {
+            throw new RuntimeException('Unsupported barcode download format.');
+        }
+
+        return [
+            'contents' => $this->generateRaster($resolved['barcode_type'], $resolved['barcode_number'], $normalizedFormat),
+            'mime_type' => $normalizedFormat === 'png' ? 'image/png' : 'image/jpeg',
+            'extension' => $normalizedFormat === 'png' ? 'png' : 'jpg',
+            'filename' => $this->makeDownloadFilename($record, $resolved['barcode_number'], $normalizedFormat === 'png' ? 'png' : 'jpg'),
+        ];
     }
 
     private function syncBarcodeAsset(ProductSku|ProductPackaging $record, string $directory): void
@@ -68,14 +98,78 @@ class BarcodeAssetService
 
     private function generateSvg(string $barcodeType, string $barcodeNumber): string
     {
+        return $this->renderSvg($this->buildBinaryPattern($barcodeType, $barcodeNumber), $barcodeNumber);
+    }
+
+    private function generateRaster(string $barcodeType, string $barcodeNumber, string $format): string
+    {
+        $binary = $this->buildBinaryPattern($barcodeType, $barcodeNumber);
+        $moduleWidth = 3;
+        $quietZone = 14;
+        $barHeight = 110;
+        $guardHeight = 126;
+        $textMargin = 10;
+        $font = 5;
+        $textWidth = imagefontwidth($font) * strlen($barcodeNumber);
+        $textHeight = imagefontheight($font);
+        $width = (strlen($binary) + ($quietZone * 2)) * $moduleWidth;
+        $height = $guardHeight + $textMargin + $textHeight + 12;
+
+        $image = imagecreatetruecolor($width, $height);
+        $white = imagecolorallocate($image, 255, 255, 255);
+        $black = imagecolorallocate($image, 17, 17, 17);
+
+        imagefill($image, 0, 0, $white);
+
+        $x = $quietZone * $moduleWidth;
+
+        foreach (str_split($binary) as $index => $bit) {
+            if ($bit !== '1') {
+                continue;
+            }
+
+            $isGuard = ($index >= 0 && $index <= 2)
+                || ($index >= 45 && $index <= 49)
+                || ($index >= 92 && $index <= 94);
+            $heightForBar = $isGuard ? $guardHeight : $barHeight;
+
+            imagefilledrectangle(
+                $image,
+                $x + ($index * $moduleWidth),
+                0,
+                $x + ($index * $moduleWidth) + $moduleWidth - 1,
+                $heightForBar,
+                $black,
+            );
+        }
+
+        $textX = max((int) floor(($width - $textWidth) / 2), 0);
+        imagestring($image, $font, $textX, $guardHeight + $textMargin, $barcodeNumber, $black);
+
+        ob_start();
+
+        if ($format === 'png') {
+            imagepng($image);
+        } else {
+            imagejpeg($image, null, 95);
+        }
+
+        $contents = (string) ob_get_clean();
+        imagedestroy($image);
+
+        return $contents;
+    }
+
+    private function buildBinaryPattern(string $barcodeType, string $barcodeNumber): string
+    {
         return match ($barcodeType) {
-            BarcodeType::UPC_A->value => $this->generateUpcASvg($barcodeNumber),
-            BarcodeType::EAN_13->value => $this->generateEan13Svg($barcodeNumber),
-            default => '',
+            BarcodeType::UPC_A->value => $this->buildUpcABinary($barcodeNumber),
+            BarcodeType::EAN_13->value => $this->buildEan13Binary($barcodeNumber),
+            default => throw new RuntimeException('Unsupported barcode rendering type.'),
         };
     }
 
-    private function generateUpcASvg(string $digits): string
+    private function buildUpcABinary(string $digits): string
     {
         $lCodes = $this->leftDigitPatterns();
         $rCodes = $this->rightDigitPatterns();
@@ -92,10 +186,10 @@ class BarcodeAssetService
         }
         $binary .= '101';
 
-        return $this->renderSvg($binary, $digits);
+        return $binary;
     }
 
-    private function generateEan13Svg(string $digits): string
+    private function buildEan13Binary(string $digits): string
     {
         $lCodes = $this->leftDigitPatterns();
         $gCodes = $this->ean13GPatterns();
@@ -114,7 +208,7 @@ class BarcodeAssetService
         }
         $binary .= '101';
 
-        return $this->renderSvg($binary, $digits);
+        return $binary;
     }
 
     private function renderSvg(string $binary, string $label): string
@@ -227,5 +321,20 @@ SVG,
             '8' => ['L', 'G', 'L', 'G', 'G', 'L'],
             '9' => ['L', 'G', 'G', 'L', 'G', 'L'],
         ];
+    }
+
+    private function makeDownloadFilename(ProductSku|ProductPackaging $record, string $barcodeNumber, string $extension): string
+    {
+        if ($record instanceof ProductSku) {
+            $base = $record->sku_code ?: 'product-sku-barcode';
+        } else {
+            $skuCode = $record->productSku?->sku_code ?: 'product-sku';
+            $base = $skuCode . '-' . $record->level . '-barcode';
+        }
+
+        $safeBase = strtolower((string) preg_replace('/[^a-z0-9]+/i', '-', $base));
+        $safeBase = trim($safeBase, '-');
+
+        return "{$safeBase}-{$barcodeNumber}.{$extension}";
     }
 }

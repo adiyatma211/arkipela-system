@@ -45,7 +45,11 @@
                                             </td>
                                             <td>
                                                 @if ($packaging->barcodeImageUrl())
-                                                    <img src="{{ $packaging->barcodeImageUrl() }}" alt="{{ $packaging->barcode_number }}" class="img-fluid" style="max-height: 70px;">
+                                                    <img src="{{ $packaging->barcodeImageUrl() }}" alt="{{ $packaging->barcode_number }}" class="img-fluid mb-2" style="max-height: 70px;">
+                                                    <div class="d-flex gap-1 flex-wrap">
+                                                        <a href="{{ route('product-packagings.barcode.download', [$packaging, 'png']) }}" class="btn btn-sm btn-light-primary">PNG</a>
+                                                        <a href="{{ route('product-packagings.barcode.download', [$packaging, 'jpeg']) }}" class="btn btn-sm btn-light-secondary">JPEG</a>
+                                                    </div>
                                                 @else
                                                     <span class="text-muted small">No preview</span>
                                                 @endif

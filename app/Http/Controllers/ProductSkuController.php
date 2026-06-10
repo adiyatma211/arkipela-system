@@ -12,7 +12,9 @@ use App\Services\BarcodeAssetService;
 use App\Services\CodeGeneratorService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
+use RuntimeException;
 
 class ProductSkuController extends Controller
 {
@@ -125,6 +127,22 @@ class ProductSkuController extends Controller
             'submitLabel' => 'Update SKU',
             'canManageProducts' => $request->user()?->hasPermission(UserPermission::PRODUCTS_MANAGE->value) ?? false,
             'barcodeTypeOptions' => BarcodeType::options(),
+        ]);
+    }
+
+    public function downloadBarcode(ProductSku $productSku, string $format): Response|RedirectResponse
+    {
+        try {
+            $download = $this->barcodeAssetService->buildDownload($productSku, $format);
+        } catch (RuntimeException $exception) {
+            return redirect()
+                ->route('product-skus.show', $productSku)
+                ->with('error', $exception->getMessage());
+        }
+
+        return response($download['contents'], 200, [
+            'Content-Type' => $download['mime_type'],
+            'Content-Disposition' => 'attachment; filename="' . $download['filename'] . '"',
         ]);
     }
 

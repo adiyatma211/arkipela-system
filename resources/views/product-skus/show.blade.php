@@ -87,6 +87,8 @@
                                         'barcodeType' => $productSku->barcode_type,
                                         'barcodeValue' => $productSku->barcode_number,
                                         'barcodeLabel' => 'Retail Barcode Preview',
+                                        'barcodeDownloadPngUrl' => route('product-skus.barcode.download', [$productSku, 'png']),
+                                        'barcodeDownloadJpegUrl' => route('product-skus.barcode.download', [$productSku, 'jpeg']),
                                     ])
                                 </div>
                             </div>
